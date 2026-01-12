@@ -25,6 +25,12 @@ jobs:
         pip install -r requirements.txt
         playwright install chromium
 
+    - name: Install Tesseract
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y tesseract-ocr
+        sudo apt-get install -y tesseract-ocr-kor
+        
     - name: Create .env file
       run: |
         echo "USER_ID=${{ secrets.USER_ID }}" >> .env
