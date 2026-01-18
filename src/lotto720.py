@@ -94,8 +94,35 @@ def run(playwright: Playwright) -> None:
         # Wait for the game UI to load
         frame.locator(".lotto720_btn_auto_number").wait_for(state="visible", timeout=15000)
 
-        # [자동번호] 클릭
-        frame.locator(".lotto720_btn_auto_number").click()
+        # Remove all intercepting pause layer popups using JavaScript (in iframe context)
+        # These elements block clicks even when they're not supposed to be visible
+        page.evaluate("""
+            () => {
+                const iframe = document.querySelector('#ifrm_tab');
+                if (iframe && iframe.contentDocument) {
+                    const doc = iframe.contentDocument;
+                    // Hide all known pause layer elements
+                    const selectors = [
+                        '#pause_layer_pop_02',
+                        '#ele_pause_layer_pop02',
+                        '.pause_layer_pop',
+                        '.pause_bg'
+                    ];
+                    
+                    selectors.forEach(selector => {
+                        const elements = doc.querySelectorAll(selector);
+                        elements.forEach(el => {
+                            el.style.display = 'none';
+                            el.style.visibility = 'hidden';
+                            el.style.pointerEvents = 'none';
+                        });
+                    });
+                }
+            }
+        """)
+
+        # [자동번호] 클릭 - use force to bypass any remaining intercepting elements
+        frame.locator(".lotto720_btn_auto_number").click(force=True)
         
         time.sleep(2)
 

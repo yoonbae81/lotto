@@ -114,15 +114,48 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list) -> None:
         page.goto(url="https://ol.dhlottery.co.kr/olotto/game/game645.do", timeout=30000, wait_until="domcontentloaded")
         print('✅ Navigated to Lotto 6/45 page')
 
-        # Dismiss popup if present
-        if page.locator("#popupLayerAlert").is_visible():
-            page.locator("#popupLayerAlert").get_by_role("button", name="확인").click()
+        # Wait for page to be fully loaded
+        page.wait_for_load_state("networkidle")
+        
+        # Remove all intercepting pause layer popups using JavaScript
+        # These elements block clicks even when they're not supposed to be visible
+        page.evaluate("""
+            () => {
+                // Hide all known pause layer elements
+                const selectors = [
+                    '#pause_layer_pop_02',
+                    '#ele_pause_layer_pop02',
+                    '.pause_layer_pop',
+                    '.pause_bg'
+                ];
+                
+                selectors.forEach(selector => {
+                    const elements = document.querySelectorAll(selector);
+                    elements.forEach(el => {
+                        el.style.display = 'none';
+                        el.style.visibility = 'hidden';
+                        el.style.pointerEvents = 'none';
+                    });
+                });
+            }
+        """)
+        
+        # Dismiss popup if present - use force to bypass any remaining intercepting elements
+        try:
+            popup_alert = page.locator("#popupLayerAlert")
+            if popup_alert.is_visible(timeout=2000):
+                # Click the confirmation button with force
+                popup_alert.get_by_role("button", name="확인").click(force=True, timeout=5000)
+                print('✅ Dismissed popup alert')
+        except Exception as e:
+            # If popup handling fails, log but continue
+            print(f'⚠️  Popup handling: {str(e)}')
 
         # Manual numbers
         if manual_numbers and len(manual_numbers) > 0:
             for game in manual_numbers:
                 for number in game:
-                    page.click(f'label[for="check645num{number}"]')
+                    page.click(f'label[for="check645num{number}"]', force=True)
                 page.click("#btnSelectNum")
                 print(f'✅ Manual game added: {game}')
 
