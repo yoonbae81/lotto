@@ -108,11 +108,17 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
 
 
 if __name__ == "__main__":
+    print("Starting balance check script...", file=sys.stderr)
     sr = ScriptReporter("Balance Check")
+    print("ScriptReporter initialized.", file=sys.stderr)
     try:
+        print("Starting sync_playwright...", file=sys.stderr)
         with sync_playwright() as playwright:
+            print("Playwright started, running balance check...", file=sys.stderr)
             balance_info = run(playwright, sr)
+            print("Balance check completed successfully.", file=sys.stderr)
             sr.success(balance_info)
     except Exception as e:
+        print(f"Caught exception in main: {e}", file=sys.stderr)
         sr.fail(traceback.format_exc())
         sys.exit(1)

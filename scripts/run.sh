@@ -38,8 +38,10 @@ echo "Logging in and saving session..."
 
 # Step 1: Check balance
 echo "Checking balance..."
-BALANCE_OUTPUT=$("$VENV_PYTHON" "$PROJECT_DIR/src/balance.py" 2>&1)
-echo "$BALANCE_OUTPUT"
+# Using tee to show output in real-time while capturing it
+"$VENV_PYTHON" "$PROJECT_DIR/src/balance.py" 2>&1 | tee balance.log
+BALANCE_OUTPUT=$(cat balance.log)
+rm balance.log
 
 AVAILABLE_AMOUNT=$(echo "$BALANCE_OUTPUT" | grep "Available Amount:" | sed 's/[^0-9]//g')
 
