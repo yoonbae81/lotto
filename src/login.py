@@ -39,7 +39,10 @@ load_environment()
 USER_ID = environ.get('USER_ID')
 PASSWD = environ.get('PASSWD')
 
+# Constants
 SESSION_PATH = "/tmp/dhlotto_session.json"
+DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+DEFAULT_VIEWPORT = {"width": 1920, "height": 1080}
 
 def save_session(context, path=SESSION_PATH):
     """
@@ -56,6 +59,7 @@ def check_logged_in_elements(page: Page, timeout: int = 2000) -> bool:
         # Check standard logout indicators
         if page.locator("#logoutBtn, .btn_logout, .btn-logout").first.is_visible(timeout=timeout):
             return True
+            
         if page.get_by_text("로그아웃", exact=False).first.is_visible(timeout=timeout):
             return True
         if page.locator("a[href*='mypage']").first.is_visible(timeout=timeout):
@@ -111,6 +115,12 @@ def login(page: Page) -> None:
     print("Navigating to login page...")
     page.goto("https://www.dhlottery.co.kr/login", timeout=30000, wait_until="domcontentloaded")
     
+    # Check for mobile redirection
+    if "m.dhlottery.co.kr" in page.url:
+        print(f"Warning: Redirected to mobile site: {page.url}")
+        # On mobile, the login form might have different IDs
+        # Try to find common mobile login elements if desktop one fails
+    
     # 3. Check if we were redirected away from login (means already logged in)
     if "/login" not in page.url and "method=login" not in page.url:
         if check_logged_in_elements(page, timeout=5000):
@@ -119,15 +129,27 @@ def login(page: Page) -> None:
 
     # 4. Fill login form
     try:
-        print("Checking login form...")
-        # If we are not on login page, we might be already logged in
-        if "/login" not in page.url and "method=login" not in page.url:
-             if check_logged_in_elements(page, timeout=2000):
-                 print("Already logged in (detected via URL and logout button)")
-                 return
-
-        page.wait_for_selector("#inpUserId", timeout=10000)
+        print(f"Checking login form at {page.url}...")
         
+        # Wait for selector with improved error message
+        try:
+            page.wait_for_selector("#inpUserId", timeout=10000)
+        except Exception as e:
+            if "m.dhlottery.co.kr" in page.url:
+                print("Mobile site detected. Trying mobile selectors...")
+                # Mobile selectors (based on typical mobile dhlottery pattern)
+                # Usually it's still #userId or similar
+                if page.locator("#userId").is_visible(timeout=2000):
+                    page.locator("#userId").fill(USER_ID)
+                    page.locator("#userPwd").fill(PASSWD)
+                    page.click(".btn_login") # typical mobile login button class
+                    return
+            
+            # Diagnostic info
+            print(f"Selector #inpUserId not found. Current URL: {page.url}")
+            print(f"Page content snippet: {page.content()[:500]}...")
+            raise e
+
         # Fill ID
         page.locator("#inpUserId").fill(USER_ID)
         # Fill Password
@@ -138,17 +160,19 @@ def login(page: Page) -> None:
         page.click("#btnLogin")
     except Exception as e:
         # Debugging: Capture state on failure
-        print(f"Login failed. Current URL: {page.url}")
-        print(f"Page Title: {page.title()}")
-        screenshot_path = "login_failed.png"
-        page.screenshot(path=screenshot_path)
-        print(f"Saved screenshot to {screenshot_path}")
+        print(f"Login process interrupted: {e}")
+        screenshot_path = f"login_failed_{int(time.time())}.png"
+        try:
+            page.screenshot(path=screenshot_path)
+            print(f"Saved failure screenshot to {screenshot_path}")
+        except:
+            pass
         
         # If we can't find the input, maybe we ARE logged in but visibility check failed
         if check_logged_in_elements(page, timeout=5000) or "mypage" in page.url:
-            print("Already logged in (detected after wait failure)")
+            print("Already logged in (detected after error)")
             return
-        raise Exception(f"Login failed or inputs not found: {e}")
+        raise Exception(f"Login failed: {e}")
 
     # 5. Wait for navigation and verify login
     try:
@@ -191,7 +215,10 @@ def main():
         try:
             print("Launching browser for initial login...")
             browser = playwright.chromium.launch(headless=True)
-            context = browser.new_context()
+            context = browser.new_context(
+                user_agent=DEFAULT_USER_AGENT,
+                viewport=DEFAULT_VIEWPORT
+            )
             page = context.new_page()
             
             sr.stage("LOGIN")

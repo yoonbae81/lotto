@@ -32,6 +32,10 @@ echo ""
 echo "Reloading systemd daemon..."
 systemctl --user daemon-reload
 
+# Enable linger for the user
+echo "Enabling linger for user $USER..."
+loginctl enable-linger "$USER"
+
 # Enable and start timer
 echo "Enabling and starting timer..."
 systemctl --user enable lotto.timer

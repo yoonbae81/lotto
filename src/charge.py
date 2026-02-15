@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 from playwright.sync_api import Playwright, sync_playwright, Page
-from login import login, SESSION_PATH
+from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT
 
 import traceback
 from script_reporter import ScriptReporter
@@ -218,7 +218,11 @@ def run(playwright: Playwright, amount: int, sr: ScriptReporter):
     browser = playwright.chromium.launch(headless=True)
     # Load session if exists
     storage_state = SESSION_PATH if Path(SESSION_PATH).exists() else None
-    context = browser.new_context(storage_state=storage_state)
+    context = browser.new_context(
+        storage_state=storage_state,
+        user_agent=DEFAULT_USER_AGENT,
+        viewport=DEFAULT_VIEWPORT
+    )
     page = context.new_page()
     
     try:

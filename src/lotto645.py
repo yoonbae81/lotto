@@ -10,7 +10,7 @@ from os import environ
 from pathlib import Path
 from dotenv import load_dotenv
 from playwright.sync_api import Playwright, sync_playwright
-from login import login, SESSION_PATH
+from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT
 
 # .env loading is handled by login module import
 
@@ -112,16 +112,14 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
         dict: 처리 결과 세부 정보 (processed_count 등)
     """
     # Create browser, context, and page
-    # Use a fixed Desktop User-Agent to prevent redirection to mobile site (m.dhlottery.co.kr)
-    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     browser = playwright.chromium.launch(headless=True)
 
     # Load session if exists
     storage_state = SESSION_PATH if Path(SESSION_PATH).exists() else None
     context = browser.new_context(
         storage_state=storage_state, 
-        user_agent=user_agent,
-        viewport={"width": 1920, "height": 1080}
+        user_agent=DEFAULT_USER_AGENT,
+        viewport=DEFAULT_VIEWPORT
     )
     page = context.new_page()
     
