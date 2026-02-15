@@ -155,10 +155,9 @@ def login(page: Page) -> None:
         dismiss_popups(page)
         
         print(f"Current URL (login page): {page.url}")
-        # Now wait for the form to be ready
-        print("Waiting for login form fields to appear...")
-        # Check both mobile and desktop selectors
-        page.wait_for_selector("#userId, #inpUserId", timeout=GLOBAL_TIMEOUT)
+        # Now wait for the form to be ready - wait for visible inputs
+        print("Waiting for login form fields to appear (visible)...")
+        page.wait_for_selector("#inpUserId", state="visible", timeout=GLOBAL_TIMEOUT)
     except Exception as e:
         print(f"Navigation or selector wait failed: {e}")
         # Capture state on failure

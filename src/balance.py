@@ -18,12 +18,12 @@ def get_balance(page: Page) -> dict:
     마이페이지에서 예치금 잔액과 구매가능 금액을 조회합니다.
     """
     print("Navigating to My Page...")
-    page.goto("https://m.dhlottery.co.kr/mypage.do?method=home", timeout=GLOBAL_TIMEOUT, wait_until="commit")
+    page.goto("https://m.dhlottery.co.kr/mypage/home", timeout=GLOBAL_TIMEOUT, wait_until="commit")
     print(f"Current URL: {page.url}")
     
-    # Check if redirected to login
-    if "/login" in page.url or "method=login" in page.url:
-        print("Redirection to login page detected. Attempting to log in again...")
+    # Check if redirected to login or error
+    if "/login" in page.url or "method=login" in page.url or "/errorPage" in page.url:
+        print("Redirection to login or error page detected. Attempting to log in again...")
         login(page)
         page.goto("https://m.dhlottery.co.kr/mypage/home", timeout=GLOBAL_TIMEOUT, wait_until="commit")
         print(f"Current URL: {page.url}")
@@ -37,7 +37,8 @@ def get_balance(page: Page) -> dict:
             raise Exception("Not logged in. Cannot retrieve balance.")
 
     # 1. Get deposit balance (예치금 잔액)
-    deposit_selectors = ["#navTotalAmt", ".pntDpstAmt"]
+    # On mobile My Page home, balance is often inside #navTotalAmt or a span with class pntDpstAmt
+    deposit_selectors = ["#navTotalAmt", ".pntDpstAmt", ".header_money"]
     deposit_text = "0"
     for selector in deposit_selectors:
         el = page.locator(selector).first
@@ -47,7 +48,7 @@ def get_balance(page: Page) -> dict:
             break
     
     # 2. Get available amount (구매가능)
-    available_selectors = ["#divCrntEntrsAmt", ".header_money"]
+    available_selectors = ["#divCrntEntrsAmt", ".totalAmt", ".header_money"]
     available_text = "0"
     for selector in available_selectors:
         el = page.locator(selector).first

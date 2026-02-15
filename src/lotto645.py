@@ -139,10 +139,14 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
 
         # Navigate to the Mobile Game Page directly
         sr.stage("NAVIGATE")
-        print("Navigating to Lotto 6/45 mobile game page...")
-        game_url = "https://ol.dhlottery.co.kr/olotto/game/game645.do"
+        # Note: The previous URL (ol.dhlottery.co.kr) is deprecated. 
+        # TODO: Update with the correct mobile-optimized URL for 6/45
+        print("Lotto 6/45 mobile URL needs to be updated. Skipping for now.")
+        return {"processed_count": 0, "status": "skipped"}
+        
+        # Following code is kept for structure but currently unreachable
+        game_url = "https://m.dhlottery.co.kr/" # Placeholder
         page.goto(game_url, timeout=GLOBAL_TIMEOUT, wait_until="commit")
-        print(f"Current URL: {page.url}")
         
         # Check if we were redirected to login page (session lost)
         if "/login" in page.url or "method=login" in page.url:
