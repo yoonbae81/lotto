@@ -49,7 +49,7 @@ DEFAULT_HEADERS = {
     "Sec-CH-UA-Mobile": "?1",
     "Sec-CH-UA-Platform": '"iOS"'
 }
-GLOBAL_TIMEOUT = 5000 # 5 seconds global timeout
+GLOBAL_TIMEOUT = 10000 # 10 seconds global timeout for better reliability
 
 def save_session(context, path=SESSION_PATH):
     """
@@ -83,10 +83,14 @@ def dismiss_popups(page: Page):
     """Dismiss common mobile popups that might block clicks."""
     try:
         # On mobile, popups often have specific close buttons
-        close_buttons = page.locator(".btn_close, .close, button:has-text('닫기'), a:has-text('오늘 하루 보지 않기')").locator("visible=true")
-        for i in range(close_buttons.count()):
+        # visible=true is a bit slow, so we use a faster selector first
+        close_buttons = page.locator(".btn_close, .close, .btn_pop_close, button:has-text('닫기'), a:has-text('오늘 하루 보지 않기')")
+        count = close_buttons.count()
+        for i in range(count):
             try:
-                close_buttons.nth(i).click(timeout=1000)
+                btn = close_buttons.nth(i)
+                if btn.is_visible(timeout=500):
+                    btn.click(timeout=1000)
             except:
                 pass
     except Exception:
@@ -98,23 +102,13 @@ def check_logged_in_elements(page: Page, timeout: int = 2000) -> bool:
     """Helper to check for visual indicators of being logged in."""
     try:
         # 1. Check for logout indicators (strongly indicates logged in)
-        if page.locator("#logoutBtn, .btn_logout, .btn-logout").first.is_visible(timeout=timeout):
+        if page.locator("#logoutBtn, .btn_logout, .btn-logout, a:has-text('로그아웃')").first.is_visible(timeout=timeout):
             return True
             
-        if page.get_by_text("로그아웃", exact=False).first.is_visible(timeout=timeout):
-            return True
-
         # 2. Check for login indicators (strongly indicates NOT logged in)
-        # We check both the text and the common login link classes
-        if page.get_by_role("link", name=re.compile("로그인")).first.is_visible(timeout=timeout):
-            return False
-        
-        if page.locator(".btn_login, .btn-login, #btnLogin").first.is_visible(timeout=timeout):
+        if page.locator("#btnLogin, .btn_login, .btn-login, a:has-text('로그인')").first.is_visible(timeout=timeout):
             return False
             
-        # 3. Fallback: If we don't see login but see mypage (less reliable but okay as secondary)
-        # Note: on dhlottery, 'MY' link is visible even when logged out, so we skip general href check
-        
         return False
     except Exception:
         return False
@@ -126,23 +120,28 @@ def is_logged_in(page: Page) -> bool:
     This is a non-intrusive check.
     """
     try:
-        if check_logged_in_elements(page, timeout=2000):
+        # First check current page without navigation
+        if check_logged_in_elements(page, timeout=1000):
             return True
         
-        # If we are on the login page itself, we are likely NOT logged in
-        if "/login" in page.url or "method=login" in page.url:
+        # If we are on a page that strongly indicates login/logout state, trust it
+        if "/login" in page.url:
              return False
+        if "/mypage" in page.url:
+             return True
 
-        # Try to navigate or check current page for identity
+        # If not sure, go to a page that uniquely identifies login state
         if page.url == "about:blank" or "dhlottery.co.kr" not in page.url:
-            # Use 'commit' for speed
-            print("Navigating directly to login page for session check...")
-            page.goto("https://m.dhlottery.co.kr/login", timeout=GLOBAL_TIMEOUT, wait_until="commit")
+            print("Navigating to check session state...")
+            # Use 'commit' to catch the initial headers/redirect
+            response = page.goto("https://m.dhlottery.co.kr/login", timeout=GLOBAL_TIMEOUT, wait_until="commit")
+            # If we were redirected away from login to main or mypage, we ARE logged in
+            if "/login" not in page.url and ("main" in page.url or "mypage" in page.url):
+                print(f"Redirected from login to {page.url} - session is active.")
+                return True
         
-        if check_logged_in_elements(page, timeout=3000):
-            return True
-        
-        return False
+        # Final visual check
+        return check_logged_in_elements(page, timeout=2000)
     except Exception:
         return False
 
@@ -158,77 +157,84 @@ def login(page: Page) -> None:
     # Setup alert handler to automatically accept any alerts
     setup_dialog_handler(page)
 
-    # 1. Quick check if already logged in (now returns False on mobile site)
+    # 1. Quick check if already logged in
     if is_logged_in(page):
-        print("Already logged in. Skipping login process.")
+        print("Already logged in. Skipping login.")
         return
 
     print('Starting login process...')
     
-    # 2. Go directly to login page to establish session
-    print("Navigating directly to login page...")
+    # 2. Go directly to login page if not already there
     target_url = "https://m.dhlottery.co.kr/login"
+    if target_url not in page.url:
+        print(f"Navigating to login page: {target_url}")
+        try:
+            # Use 'domcontentloaded' – we don't need all images/tracking to fill a login form
+            page.goto(target_url, timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
+        except Exception as e:
+            print(f"Navigation to login page failed: {e}")
+            page.screenshot(path=f"login_nav_failed_{int(time.time())}.png")
+            raise e
+    
+    # Ensure page is ready
     try:
-        page.goto(target_url, timeout=GLOBAL_TIMEOUT, wait_until="load")
-        print(f"Current URL: {page.url}")
-        
-        # New: Dismiss any popups that might block the login form
         dismiss_popups(page)
         
-        print(f"Current URL (login page): {page.url}")
-        # Now wait for the form to be ready - wait for visible inputs
-        print("Waiting for login form fields to appear (visible)...")
+        # Wait for form fields - use visible=True for reliability
         page.wait_for_selector("#inpUserId", state="visible", timeout=GLOBAL_TIMEOUT)
     except Exception as e:
-        print(f"Navigation or selector wait failed: {e}")
-        # Capture state on failure
-        page.screenshot(path=f"login_navigation_failed_{int(time.time())}.png")
+        print(f"Login form not ready: {e}")
+        page.screenshot(path=f"login_form_failed_{int(time.time())}.png")
         raise e
     
-    # 3. Fill login form
+    # 3. Fill and submit login form
     try:
-        print(f"Filling login form at {page.url}...")
+        print(f"Logging in as {USER_ID[:3]}***...")
         
-        # Mobile specific input IDs
-        id_selector = "#inpUserId"
-        pw_selector = "#inpUserPswdEncn"
+        # Clear fields just in case
+        page.locator("#inpUserId").fill("")
+        page.locator("#inpUserId").fill(USER_ID)
         
-        print(f"Entering User ID: {USER_ID[:3]}***")
-        page.locator(id_selector).fill(USER_ID)
+        page.locator("#inpUserPswdEncn").fill("")
+        page.locator("#inpUserPswdEncn").fill(PASSWD)
         
-        print("Entering Password: ***")
-        page.locator(pw_selector).fill(PASSWD)
-        
-        print("Clicking login button (#btnLogin)...")
+        # Click login button
         page.click("#btnLogin")
     except Exception as e:
-        # Debugging: Capture state on failure
-        print(f"Login process interrupted: {e}")
-        screenshot_path = f"login_failed_{int(time.time())}.png"
-        try:
-            page.screenshot(path=screenshot_path)
-            print(f"Saved failure screenshot to {screenshot_path}")
-        except:
-            pass
+        print(f"Form submission failed: {e}")
+        screenshot_path = f"login_submit_failed_{int(time.time())}.png"
+        page.screenshot(path=screenshot_path)
         
-        # If we can't find the input, maybe we ARE logged in but visibility check failed
-        if check_logged_in_elements(page, timeout=5000) or "mypage" in page.url:
-            print("Already logged in (detected after error)")
+        # Final fallback check
+        if check_logged_in_elements(page, timeout=3000):
+            print("Detected login success despite submission error")
             return
-        raise Exception(f"Login failed: {e}")
+        raise Exception(f"Login click failed: {e}")
 
-    # 5. Wait for navigation and verify login
+    # 5. Wait for success indicator
+    print("Verifying login...")
     try:
-        print("Waiting for login completion...")
-        # Simple wait for logout button presence
-        start_time = time.time()
-        while time.time() - start_time < 15:
-            if check_logged_in_elements(page, timeout=1000):
-                print('Logged in successfully')
+        # Wait up to 10s for login to finalize
+        success = False
+        start_t = time.time()
+        while time.time() - start_t < 10:
+            if check_logged_in_elements(page, timeout=500):
+                success = True
                 break
+            # If we see an error message, stop early
+            if page.get_by_text("아이디 또는 비밀번호가 일치하지 않습니다").is_visible(timeout=100):
+                raise Exception("Invalid credentials.")
             time.sleep(0.5)
+            
+        if success:
+            print('Login successful')
         else:
-             raise TimeoutError("Login verification timed out")
+            # Check URL as fallback
+            if "login" not in page.url and "dhlottery" in page.url:
+                print(f"Login likely successful (Redirected to {page.url})")
+            else:
+                raise TimeoutError("Login verification timed out")
+
 
     except Exception:
         print("Login verification timed out. Checking content...")
@@ -245,15 +251,6 @@ def login(page: Page) -> None:
 
     # Give a bit more time for session cookies to be stable
     time.sleep(2)
-    
-    # Synchronize session with the game subdomain if needed
-    try:
-        print("Synchronizing session with game subdomains...")
-        sync_url = "https://el.dhlottery.co.kr/common_mobile/do_sso.jsp"
-        page.goto(sync_url, timeout=GLOBAL_TIMEOUT, wait_until="commit")
-        print("Session synchronization complete.")
-    except Exception as e:
-        print(f"Subdomain sync warning: {e}")
     
 
 def main():

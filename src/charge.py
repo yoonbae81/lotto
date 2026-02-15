@@ -177,8 +177,6 @@ def charge_deposit(page: Page, amount: int) -> bool:
         return False
 
 def run(playwright: Playwright, amount: int, sr: ScriptReporter):
-    # 유저 요청: "화면 띄어서 최적화 시켜주고" -> 기본적으로 headful로 동작하도록 유도
-    # 단, 환경변수에 명시적으로 HEADLESS=true가 있으면 따름
     HEADLESS = os.environ.get('HEADLESS', 'false').lower() == 'true'
     
     browser = playwright.chromium.launch(headless=HEADLESS, slow_mo=0 if HEADLESS else 200)
