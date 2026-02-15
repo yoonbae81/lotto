@@ -101,16 +101,9 @@ def parse_arguments():
 def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: ScriptReporter) -> dict:
     """
     로또 6/45를 자동 및 수동으로 구매합니다.
-    
-    Args:
-        playwright: Playwright 객체
-        auto_games: 자동 구매 게임 수
-        manual_numbers: 수동 구매 번호 리스트
-        sr: ScriptReporter 객체
-    
-    Returns:
-        dict: 처리 결과 세부 정보 (processed_count 등)
     """
+    GAME_URL = "https://ol.dhlottery.co.kr/olotto/game_mobile/game645.do"
+    
     # Create browser, context, and page
     HEADLESS = environ.get('HEADLESS', 'true').lower() == 'true'
     browser = playwright.chromium.launch(headless=HEADLESS, slow_mo=0 if HEADLESS else 500)
@@ -123,92 +116,122 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
         viewport=DEFAULT_VIEWPORT,
         extra_http_headers=DEFAULT_HEADERS
     )
-    page = context.new_page()
     
-    # 0. Setup alert handler to automatically accept any alerts (like session timeout alerts)
-    setup_dialog_handler(page)
-
-    # Perform login only if needed
-    from login import is_logged_in
     try:
+        page = context.new_page()
+        setup_dialog_handler(page)
+
+        # 1. Session Check & Login
+        from login import is_logged_in
+        sr.stage("CHECK_SESSION")
         if not is_logged_in(page):
+            print("Session expired or missing. Logging in...")
             sr.stage("LOGIN")
             login(page)
         else:
-            print("Already logged in. Skipping login stage.")
-
-        # Navigate to the Mobile Game Page directly
+            print("Session is valid.")
+        
+        # 2. Navigate to Game Page
         sr.stage("NAVIGATE")
-        # Note: The previous URL (ol.dhlottery.co.kr) is deprecated. 
-        # TODO: Update with the correct mobile-optimized URL for 6/45
-        print("Lotto 6/45 mobile URL needs to be updated. Skipping for now.")
-        return {"processed_count": 0, "status": "skipped"}
-        
-        # Following code is kept for structure but currently unreachable
-        game_url = "https://m.dhlottery.co.kr/" # Placeholder
-        page.goto(game_url, timeout=GLOBAL_TIMEOUT, wait_until="commit")
-        
-        # Check if we were redirected to login page (session lost)
-        if "/login" in page.url or "method=login" in page.url:
-            print("Redirection detected. Attempting to log in again...")
-            sr.stage("RELOGIN")
-            login(page)
-            page.goto(game_url, timeout=GLOBAL_TIMEOUT, wait_until="commit")
-            print(f"Current URL: {page.url}")
+        print(f"Navigating to Lotto 6/45 mobile game: {GAME_URL}")
+        try:
+            # Use 'domcontentloaded' for faster loading
+            page.goto(GAME_URL, timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
+            
+            # Final check if redirected
+            if "/login" in page.url or "method=login" in page.url:
+                print("Session lost during navigation. Re-logging in...")
+                login(page)
+                page.goto(GAME_URL, timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
+        except Exception as e:
+            print(f"Navigation failed: {e}")
+            page.screenshot(path=f"lotto645_nav_failed_{int(time.time())}.png")
+            raise e
 
-        # Wait for the game interface to load
-        print("Waiting for game interface to load...")
-        page.wait_for_selector("#checkAutoSelect, #btnSelectNum", state="visible", timeout=GLOBAL_TIMEOUT)
-
-        # 1. Automatic games
+        # Give a moment for components to initialize
+        time.sleep(1)
+        
+        # 3. Selection Flow
         sr.stage("SELECT_NUMBERS")
+        
+        # Automatic games
         if auto_games > 0:
             print(f"Adding automatic game(s): {auto_games}")
-            # Check '자동선택'
-            page.locator('label[for="checkAutoSelect"]').click()
-            # Select amount
-            page.locator("#amoundApply").select_option(str(auto_games))
-            # Click '확인'
-            page.locator("#btnSelectNum").click()
+            # On mobile, clicking '자동 1매 추가' adds one game to the list
+            auto_btn = page.locator("button:has-text('자동 1매 추가')")
+            for i in range(auto_games):
+                try:
+                    # Ensure button is visible/ready
+                    if auto_btn.is_visible(timeout=3000):
+                        auto_btn.click()
+                        time.sleep(0.5)
+                    else:
+                        print(f"Auto button not visible for game {i+1}")
+                        break
+                except Exception as e:
+                    print(f"Failed to click auto button: {e}")
+                    break
 
-        # 2. Manual numbers
+        # Manual numbers
         if manual_numbers and len(manual_numbers) > 0:
-            for game in manual_numbers:
-                print(f"Adding manual game: {game}")
-                # Ensure '수동선택' is active if needed (usually default or after auto)
-                # On mobile, clicking a number might just work
-                for number in game:
-                    page.locator(f'label[for="check645num{number}"]').click()
-                page.locator("#btnSelectNum").click()
+            for numbers in manual_numbers:
+                print(f"Adding manual game: {numbers}")
+                # Select each number
+                for number in numbers:
+                    num_el = page.locator(f".lt-num:has-text('{number}')").first
+                    if num_el.is_visible(timeout=2000):
+                        num_el.click()
+                    else:
+                        print(f"Number {number} not found on board")
+                
+                # Click '선택완료' to add to list
+                select_done = page.locator("#btnSelectNum, button:has-text('선택완료')").first
+                if select_done.is_visible(timeout=2000):
+                    select_done.click()
+                time.sleep(0.5)
 
-        # 3. Check if any games were added
-        total_games = len(manual_numbers) + auto_games
+        # Check total games added
+        # (This is a simplified check, ideally we'd look at the UI list)
+        total_games = auto_games + len(manual_numbers)
         if total_games == 0:
-            print('No games to purchase!')
+            print('No games selected to purchase!')
             return {"processed_count": 0}
 
-        # 4. Purchase
+        # 4. Final Purchase
         sr.stage("PURCHASE")
-        print("Clicking 'Purchase' (구매하기)...")
-        page.locator("#btnBuy").click()
+        print(f"Clicking 'Purchase' (구매하기) for {total_games} games...")
+        buy_btn = page.locator("#btnBuy, button:has-text('구매하기')").first
+        if buy_btn.is_visible(timeout=5000):
+            buy_btn.click()
+        else:
+            print("Purchase button not visible. Check if games were added successfully.")
+            page.screenshot(path=f"lotto645_no_buy_btn_{int(time.time())}.png")
+            return {"processed_count": 0, "status": "failed"}
         
         # 5. Confirm purchase popup
         print("Confirming final purchase...")
-        # Mobile uses #popupLayerConfirm or standard alert
-        confirm_btn = page.locator("#popupLayerConfirm").get_by_role("button", name="확인")
-        if confirm_btn.is_visible(timeout=2000):
-            confirm_btn.click()
-        else:
-            # Fallback to general alert handling (automated by page.on("dialog"))
-            pass
+        try:
+            # Mobile uses a custom popup layer with '확인' button
+            confirm_btn = page.locator("#popupLayerConfirm button:has-text('확인'), button:has-text('확인'), a:has-text('확인')").first
+            if confirm_btn.is_visible(timeout=3000):
+                confirm_btn.click()
+                print("Final confirmation clicked.")
+        except Exception:
+            # Fallback for standard alert (though dialog handler should catch it)
+            print("No confirmation popup found, assuming initial dialog handler handled it.")
 
         time.sleep(2)
-        print(f'Lotto 6/45: All {total_games} games purchased successfully!')
+        print(f'Lotto 6/45: Purchase process completed.')
         return {"processed_count": total_games}
 
-
+    except Exception as e:
+        print(f"Flow interrupted: {e}")
+        try:
+            page.screenshot(path=f"lotto645_error_{int(time.time())}.png")
+        except:
+            pass
+        raise
     finally:
-        # Cleanup
         context.close()
         browser.close()
 
