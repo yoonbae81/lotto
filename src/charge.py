@@ -167,7 +167,7 @@ def charge_deposit(page: Page, amount: int) -> bool:
         return False
 
     print(f"Navigating to charge page for {amount:,} won...")
-    page.goto("https://www.dhlottery.co.kr/mypage/mndpChrg", timeout=30000, wait_until="domcontentloaded")
+    page.goto("https://www.dhlottery.co.kr/mypage/mndpChrg", timeout=30000, wait_until="commit")
     
     # 간편충전 선택
     page.click("text=간편충전")

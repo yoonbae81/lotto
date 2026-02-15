@@ -17,13 +17,13 @@ def get_balance(page: Page) -> dict:
     마이페이지에서 예치금 잔액과 구매가능 금액을 조회합니다.
     """
     print("Navigating to My Page...")
-    page.goto("https://www.dhlottery.co.kr/mypage/home", timeout=30000)
+    page.goto("https://www.dhlottery.co.kr/mypage/home", timeout=30000, wait_until="commit")
     
     # Check if redirected to login
     if "/login" in page.url:
         print("Redirection to login page detected. Attempting to log in again...")
         login(page)
-        page.goto("https://www.dhlottery.co.kr/mypage/home", timeout=30000)
+        page.goto("https://www.dhlottery.co.kr/mypage/home", timeout=30000, wait_until="commit")
     
     print("Waiting for balance elements...")
     # Try multiple possible selectors for the balance

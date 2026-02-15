@@ -94,7 +94,8 @@ def is_logged_in(page: Page) -> bool:
 
         # Try to navigate to a page that requires login and see if it redirects
         if page.url == "about:blank" or "dhlottery.co.kr" not in page.url or "common.do?method=main" not in page.url:
-            page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=15000, wait_until="domcontentloaded")
+            # Use 'commit' to bypass slow scripts during the identity check
+            page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=15000, wait_until="commit")
         
         if check_logged_in_elements(page, timeout=5000):
             return True
@@ -124,15 +125,35 @@ def login(page: Page) -> None:
     
     # 2. Go to login page
     print("Navigating to login page...")
-    # Add a cache-busting or view-forcing query param if applicable
-    page.goto("https://www.dhlottery.co.kr/login", timeout=30000, wait_until="domcontentloaded")
+    try:
+        # Use wait_until="commit" to return immediately after navigation is accepted,
+        # then we wait for the specific selector we need. This bypasses slow scripts/resources.
+        page.goto("https://www.dhlottery.co.kr/login", timeout=30000, wait_until="commit")
+        
+        # Now wait for the form to be ready
+        print("Waiting for login form to appear...")
+        page.wait_for_selector("#inpUserId", timeout=20000)
+    except Exception as e:
+        print(f"Initial navigation or selector wait failed: {e}")
+        # Take a screenshot to see what's wrong
+        screenshot_path = f"login_nav_failed_{int(time.time())}.png"
+        try:
+            page.screenshot(path=screenshot_path)
+            print(f"Saved navigation failure screenshot to {screenshot_path}")
+        except:
+            pass
+        
+        # If we are on mobile site, we can try to proceed
+        if "m.dhlottery.co.kr" in page.url:
+            print("Detected mobile site during navigation. Proceeding to mobile handling...")
+        else:
+             # If it's a real timeout and we're not on the right page, re-raise if not logged in
+             if not check_logged_in_elements(page, timeout=3000):
+                 raise e
     
     # Check for persistent mobile redirection
     if "m.dhlottery.co.kr" in page.url:
         print(f"Warning: Still redirected to mobile site: {page.url}")
-        # Try one more time with a direct link to desktop main after clearing cookies if needed
-        # But let's try to just use mobile selectors as a fallback if it's really stuck
-    
     # 3. Check if we were redirected away from login (means already logged in)
     if "/login" not in page.url and "method=login" not in page.url:
         if check_logged_in_elements(page, timeout=5000):
@@ -226,16 +247,17 @@ def login(page: Page) -> None:
     # This prevents the 'Timeout' or 'Session lost' issues when moving between subdomains.
     try:
         print("Synchronizing session with game subdomain...")
-        page.goto("https://el.dhlottery.co.kr/common.do?method=sso", timeout=10000)
-        # Often visiting the main page of the subdomain helps
-        page.goto("https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LO40", timeout=10000, wait_until="domcontentloaded")
+        # Use wait_until="commit" for fast cross-domain redirection
+        page.goto("https://el.dhlottery.co.kr/common.do?method=sso", timeout=15000, wait_until="commit")
+        # Often visiting a key page helps stabilize the session
+        page.goto("https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LO40", timeout=15000, wait_until="commit")
         print("Subdomain session synced.")
     except Exception as e:
         print(f"Subdomain sync warning: {e}")
     
-    # Return to main page to confirm everything is still fine
+    # Return to main page
     try:
-        page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=10000)
+        page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=15000, wait_until="commit")
     except:
         pass
 

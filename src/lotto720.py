@@ -56,7 +56,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
     # This ensures that cookies are 'active' before hitting the game subdomain
     try:
         print("Priming session on main domain...")
-        page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=15000)
+        page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=15000, wait_until="commit")
     except Exception as e:
         print(f"Priming warning: {e}")
 
@@ -64,20 +64,20 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
         # Navigate to the Wrapper Page (TotalGame.jsp) which handles session sync correctly
         print("Navigating to Lotto 720 Wrapper page...")
         # Add referer to seem like a natural navigation from the main site
-        page.goto(GAME_URL, timeout=30000, wait_until="domcontentloaded", referer="https://www.dhlottery.co.kr/")
+        page.goto(GAME_URL, timeout=30000, wait_until="commit", referer="https://www.dhlottery.co.kr/")
         
         # Check if we were redirected to mobile or login page (session lost)
         if "/login" in page.url or "method=login" in page.url or "m.dhlottery.co.kr" in page.url:
             print(f"Redirection detected (URL: {page.url}). Attempting to log in again...")
             login(page)
-            page.goto(GAME_URL, timeout=30000, wait_until="domcontentloaded")
+            page.goto(GAME_URL, timeout=30000, wait_until="commit")
 
         # Check for logout state on the wrapper page itself
         # The wrapper page usually has a "로그인" button if session is invalid
         if page.get_by_text("로그인", exact=True).first.is_visible(timeout=3000):
              print("Wrapper page shows 'Login' button. Re-logging in...")
              login(page)
-             page.goto(GAME_URL, timeout=30000, wait_until="domcontentloaded")
+             page.goto(GAME_URL, timeout=30000, wait_until="commit")
 
         # Access the game iframe
         # The actual game UI is loaded inside this iframe

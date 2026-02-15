@@ -140,7 +140,7 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
         # 0. Priming: Ensure domain session synchronization
         try:
             print("Priming session on main domain...")
-            page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=15000)
+            page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=15000, wait_until="commit")
             time.sleep(1) 
         except Exception as e:
             print(f"Priming warning: {e}")
@@ -149,7 +149,7 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
         sr.stage("NAVIGATE")
         print("Navigating to Lotto 6/45 Wrapper page...")
         game_url = "https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LO40"
-        page.goto(game_url, timeout=30000, wait_until="domcontentloaded", referer="https://www.dhlottery.co.kr/")
+        page.goto(game_url, timeout=30000, wait_until="commit", referer="https://www.dhlottery.co.kr/")
         
         # Check if we were redirected to login page (session lost)
         time.sleep(1) 
@@ -157,7 +157,7 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
             print("Redirection detected. Attempting to log in again...")
             sr.stage("RELOGIN")
             login(page)
-            page.goto(game_url, timeout=30000, wait_until="domcontentloaded")
+            page.goto(game_url, timeout=30000, wait_until="commit")
 
         # Access the game iframe
         sr.stage("IFRAME_LOAD")
@@ -195,7 +195,7 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
                 if not frame.get_by_text("로그아웃").first.is_visible(timeout=5000):
                     sr.stage("RELOGIN_FRAME")
                     login(page)
-                    page.goto(game_url, timeout=30000, wait_until="domcontentloaded")
+                    page.goto(game_url, timeout=30000, wait_until="commit")
             else:
                 print(f"Login ID on Game Page: {user_id_val}")
         except Exception:
