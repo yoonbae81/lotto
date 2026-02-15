@@ -36,7 +36,7 @@ def get_balance(page: Page) -> dict:
     except Exception as e:
         print(f"Balance selectors not found immediately ({e}). Current page: {page.url}")
         # diagnostic: if we see login button, we are not logged in
-        if page.get_by_role("link", name="로그인").is_visible():
+        if page.get_by_role("link", name=re.compile("로그인")).first.is_visible():
             raise Exception("Not logged in. Cannot retrieve balance.")
 
     # 1. Get deposit balance (예치금 잔액)

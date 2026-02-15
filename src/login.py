@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import time
+import re
 from os import environ
 from pathlib import Path
 from dotenv import load_dotenv
@@ -61,14 +62,24 @@ def save_session(context, path=SESSION_PATH):
 def check_logged_in_elements(page: Page, timeout: int = 2000) -> bool:
     """Helper to check for visual indicators of being logged in."""
     try:
-        # Check standard logout indicators
+        # 1. Check for logout indicators (strongly indicates logged in)
         if page.locator("#logoutBtn, .btn_logout, .btn-logout").first.is_visible(timeout=timeout):
             return True
             
         if page.get_by_text("로그아웃", exact=False).first.is_visible(timeout=timeout):
             return True
-        if page.locator("a[href*='mypage']").first.is_visible(timeout=timeout):
-            return True
+
+        # 2. Check for login indicators (strongly indicates NOT logged in)
+        # We check both the text and the common login link classes
+        if page.get_by_role("link", name=re.compile("로그인")).first.is_visible(timeout=timeout):
+            return False
+        
+        if page.locator(".btn_login, .btn-login, #btnLogin").first.is_visible(timeout=timeout):
+            return False
+            
+        # 3. Fallback: If we don't see login but see mypage (less reliable but okay as secondary)
+        # Note: on dhlottery, 'MY' link is visible even when logged out, so we skip general href check
+        
         return False
     except Exception:
         return False
@@ -100,6 +111,10 @@ def is_logged_in(page: Page) -> bool:
         if check_logged_in_elements(page, timeout=5000):
             return True
         
+        # Additional check: if login link is visible, we are definitely NOT logged in
+        if page.get_by_role("link", name=re.compile("로그인")).first.is_visible(timeout=2000):
+            return False
+            
         return False
     except Exception:
         return False
