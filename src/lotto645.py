@@ -10,7 +10,7 @@ from os import environ
 from pathlib import Path
 from dotenv import load_dotenv
 from playwright.sync_api import Playwright, sync_playwright
-from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS
+from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT
 
 # .env loading is handled by login module import
 
@@ -140,7 +140,7 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
         # 0. Priming: Ensure domain session synchronization
         try:
             print("Priming session on main domain...")
-            page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=15000, wait_until="commit")
+            page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=GLOBAL_TIMEOUT, wait_until="commit")
             print(f"Current URL: {page.url}")
             time.sleep(1) 
         except Exception as e:
@@ -150,7 +150,7 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
         sr.stage("NAVIGATE")
         print("Navigating to Lotto 6/45 Wrapper page...")
         game_url = "https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LO40"
-        page.goto(game_url, timeout=30000, wait_until="commit", referer="https://www.dhlottery.co.kr/")
+        page.goto(game_url, timeout=GLOBAL_TIMEOUT, wait_until="commit", referer="https://www.dhlottery.co.kr/")
         print(f"Current URL: {page.url}")
         
         # Check if we were redirected to login page (session lost)
@@ -159,14 +159,14 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
             print("Redirection detected. Attempting to log in again...")
             sr.stage("RELOGIN")
             login(page)
-            page.goto(game_url, timeout=30000, wait_until="commit")
+            page.goto(game_url, timeout=GLOBAL_TIMEOUT, wait_until="commit")
             print(f"Current URL: {page.url}")
 
         # Access the game iframe
         sr.stage("IFRAME_LOAD")
         print("Waiting for game iframe to load...")
         try:
-            page.wait_for_selector("#ifrm_tab", state="visible", timeout=20000)
+            page.wait_for_selector("#ifrm_tab", state="visible", timeout=GLOBAL_TIMEOUT)
             print("Iframe #ifrm_tab found")
         except Exception:
             print("Iframe #ifrm_tab not visible. Current URL:", page.url)
@@ -176,16 +176,16 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
         # Wait for iframe content
         try:
              # Wait for a core element inside the frame
-             frame.locator("#num2, #btnSelectNum").first.wait_for(state="attached", timeout=30000)
+             frame.locator("#num2, #btnSelectNum").first.wait_for(state="attached", timeout=GLOBAL_TIMEOUT)
              # Wait for the game interface
-             frame.locator("#num2").wait_for(state="visible", timeout=15000)
+             frame.locator("#num2").wait_for(state="visible", timeout=GLOBAL_TIMEOUT)
              print("Game interface loaded (#num2 visible)")
         except Exception as e:
              # Retry once if it fails
              print(f"Timeout waiting for iframe content ({e}). Retrying navigation...")
-             page.reload(wait_until="networkidle")
-             page.wait_for_selector("#ifrm_tab", state="visible", timeout=20000)
-             frame.locator("#num2, #btnSelectNum").first.wait_for(state="attached", timeout=30000)
+             page.reload(wait_until="commit")
+             page.wait_for_selector("#ifrm_tab", state="visible", timeout=GLOBAL_TIMEOUT)
+             frame.locator("#num2, #btnSelectNum").first.wait_for(state="attached", timeout=GLOBAL_TIMEOUT)
 
         print('Navigated to Lotto 6/45 Game Frame')
 
@@ -195,10 +195,10 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
             if not user_id_val:
                 print("Session not found in frame. Re-verifying...")
                 # Some versions might hide logout button instead
-                if not frame.get_by_text("로그아웃").first.is_visible(timeout=5000):
+            if not frame.get_by_text("로그아웃").first.is_visible(timeout=GLOBAL_TIMEOUT):
                     sr.stage("RELOGIN_FRAME")
                     login(page)
-                    page.goto(game_url, timeout=30000, wait_until="commit")
+                    page.goto(game_url, timeout=GLOBAL_TIMEOUT, wait_until="commit")
             else:
                 print(f"Login ID on Game Page: {user_id_val}")
         except Exception:

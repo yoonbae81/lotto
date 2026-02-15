@@ -6,7 +6,7 @@ from os import environ
 from pathlib import Path
 from dotenv import load_dotenv
 from playwright.sync_api import Playwright, sync_playwright
-from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS
+from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT
 
 import sys
 import traceback
@@ -56,21 +56,21 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
     # This ensures that cookies are 'active' before hitting the game subdomain
     try:
         print("Priming session on main domain...")
-        page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=15000, wait_until="commit")
+        page.goto("https://www.dhlottery.co.kr/common.do?method=main", timeout=GLOBAL_TIMEOUT, wait_until="commit")
     except Exception as e:
         print(f"Priming warning: {e}")
 
     try:
         # Navigate to the Game Page directly
         print(f"Navigating to Lotto 720 mobile game page: {GAME_URL}")
-        page.goto(GAME_URL, timeout=30000, wait_until="commit", referer="https://m.dhlottery.co.kr/")
+        page.goto(GAME_URL, timeout=GLOBAL_TIMEOUT, wait_until="commit", referer="https://m.dhlottery.co.kr/")
         print(f"Current URL: {page.url}")
         
         # Check if we were redirected to login page (session lost)
         if "/login" in page.url or "method=login" in page.url:
             print(f"Redirection detected (URL: {page.url}). Attempting to log in again...")
             login(page)
-            page.goto(GAME_URL, timeout=30000, wait_until="commit")
+            page.goto(GAME_URL, timeout=GLOBAL_TIMEOUT, wait_until="commit")
             print(f"Current URL: {page.url}")
 
         # Give it a moment to load components
@@ -86,7 +86,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
         current_balance = 0
         for selector in balance_selectors:
             el = page.locator(selector).first
-            if el.is_visible(timeout=5000):
+            if el.is_visible(timeout=GLOBAL_TIMEOUT):
                 val = el.inner_text() if not el.get_attribute("value") else el.get_attribute("value")
                 current_balance = int(re.sub(r'[^0-9]', '', val) or '0')
                 print(f"Current Balance: {current_balance:,} KRW (via {selector})")
@@ -105,7 +105,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
         # Wait for the game UI to load
         # Mobile selectors might differ. Common one for auto: .btn_auto, .lotto720_btn_auto_number
         auto_btn = page.locator(".lotto720_btn_auto_number, .btn_auto, #btnAuto").first
-        auto_btn.wait_for(state="visible", timeout=15000)
+        auto_btn.wait_for(state="visible", timeout=GLOBAL_TIMEOUT)
 
         # Remove all intercepting pause layer popups using JavaScript
         # These elements block clicks even when they're not supposed to be visible
@@ -153,7 +153,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
         # Handle Confirmation Popup
         print("Waiting for final confirmation popup...")
         confirm_popup = page.locator("#lotto720_popup_confirm, #popupLayerConfirm").first
-        confirm_popup.wait_for(state="visible", timeout=5000)
+        confirm_popup.wait_for(state="visible", timeout=GLOBAL_TIMEOUT)
         
         # Click Final Purchase Button
         print("Confirming final purchase...")

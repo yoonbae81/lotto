@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 from playwright.sync_api import Playwright, sync_playwright, Page
-from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS
+from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT
 
 import traceback
 from script_reporter import ScriptReporter
@@ -59,7 +59,7 @@ def parse_keypad(page: Page) -> dict:
     # Updated from .kpd-layer to .nppfs-keypad based on browser inspection
     keypad_selector = ".nppfs-keypad"
     try:
-        page.wait_for_selector(keypad_selector, state="visible", timeout=10000)
+        page.wait_for_selector(keypad_selector, state="visible", timeout=GLOBAL_TIMEOUT)
     except Exception:
         # Check if tesseract is actually available
         try:
@@ -170,14 +170,14 @@ def charge_deposit(page: Page, amount: int) -> bool:
 
     print(f"Navigating to charge page for {amount:,} won...")
     # Correct Mobile charge URL
-    page.goto("https://m.dhlottery.co.kr/mypage/mndpChrg", timeout=30000, wait_until="networkidle")
+    page.goto("https://m.dhlottery.co.kr/mypage/mndpChrg", timeout=GLOBAL_TIMEOUT, wait_until="networkidle")
     print(f"Current URL: {page.url}")
     
     # Check if we were redirected to login
     if "/login" in page.url or "method=login" in page.url:
         print(f"Redirection detected (URL: {page.url}). Attempting to log in again...")
         login(page)
-        page.goto("https://m.dhlottery.co.kr/mypage/mndpChrg", timeout=30000, wait_until="networkidle")
+        page.goto("https://m.dhlottery.co.kr/mypage/mndpChrg", timeout=GLOBAL_TIMEOUT, wait_until="networkidle")
         print(f"Current URL: {page.url}")
 
     # 간편충전 선택 (Easy Charge tab)
@@ -186,11 +186,11 @@ def charge_deposit(page: Page, amount: int) -> bool:
     try:
         # Try specific button selector first
         easy_charge_tab = page.locator("li#tab1 button, #tab1 a, button:has-text('간편충전')").first
-        easy_charge_tab.wait_for(state="visible", timeout=10000)
+        easy_charge_tab.wait_for(state="visible", timeout=GLOBAL_TIMEOUT)
         easy_charge_tab.click()
     except Exception as e:
         print(f"Specific '간편충전' selector failed: {e}. Trying generic text click...")
-        page.click("text=간편충전", timeout=10000)
+        page.click("text=간편충전", timeout=GLOBAL_TIMEOUT)
     
     # 금액 선택
     amount_map = {5000: "5,000", 10000: "10,000", 20000: "20,000"}
@@ -220,10 +220,10 @@ def charge_deposit(page: Page, amount: int) -> bool:
     # PIN 키패드 대기
     # Updated selector: .kpd-layer -> .nppfs-keypad
     try:
-        page.wait_for_selector(".nppfs-keypad", state="visible", timeout=10000)
+        page.wait_for_selector(".nppfs-keypad", state="visible", timeout=GLOBAL_TIMEOUT)
     except Exception:
         # Fallback for old selector just in case
-        page.wait_for_selector(".kpd-layer", state="visible", timeout=5000)
+        page.wait_for_selector(".kpd-layer", state="visible", timeout=GLOBAL_TIMEOUT)
 
     number_map = parse_keypad(page)
     

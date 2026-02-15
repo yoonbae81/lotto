@@ -49,6 +49,7 @@ DEFAULT_HEADERS = {
     "Sec-CH-UA-Mobile": "?1",
     "Sec-CH-UA-Platform": '"iOS"'
 }
+GLOBAL_TIMEOUT = 5000 # 5 seconds global timeout
 
 def save_session(context, path=SESSION_PATH):
     """
@@ -118,7 +119,7 @@ def is_logged_in(page: Page) -> bool:
         # Try to navigate or check current page for identity
         if page.url == "about:blank" or "dhlottery.co.kr" not in page.url:
             # Use 'commit' for speed
-            page.goto("https://m.dhlottery.co.kr/common.do?method=main", timeout=15000, wait_until="commit")
+            page.goto("https://m.dhlottery.co.kr/common.do?method=main", timeout=GLOBAL_TIMEOUT, wait_until="commit")
         
         if check_logged_in_elements(page, timeout=3000):
             return True
@@ -150,7 +151,7 @@ def login(page: Page) -> None:
     print("Navigating to mobile home page...")
     target_url = "https://m.dhlottery.co.kr/"
     try:
-        page.goto(target_url, timeout=30000, wait_until="networkidle")
+        page.goto(target_url, timeout=GLOBAL_TIMEOUT, wait_until="commit")
         print(f"Current URL: {page.url}")
         
         # New: Dismiss any popups that might block the login button
@@ -163,27 +164,27 @@ def login(page: Page) -> None:
              # Try other common selectors for mobile login link
              login_btn = page.get_by_role("link", name=re.compile("로그인")).first
             
-        if login_btn.is_visible(timeout=5000):
+        if login_btn.is_visible(timeout=GLOBAL_TIMEOUT):
             print(f"Clicking login button (found via selector)...")
             # Use force=True if it might be obscured, or just click
-            login_btn.click(timeout=10000)
+            login_btn.click(timeout=GLOBAL_TIMEOUT)
         else:
             print("Login button not visible on home page. Navigating to login URL directly...")
-            page.goto("https://m.dhlottery.co.kr/user.do?method=login", timeout=20000, wait_until="load")
+            page.goto("https://m.dhlottery.co.kr/user.do?method=login", timeout=GLOBAL_TIMEOUT, wait_until="load")
             
         print(f"Current URL (after login navigation): {page.url}")
         # Now wait for the form to be ready
         print("Waiting for login form fields to appear...")
         # Subagent confirmed #inpUserId and #inpUserPswdEncn
-        page.wait_for_selector("#inpUserId", timeout=20000)
+        page.wait_for_selector("#inpUserId", timeout=GLOBAL_TIMEOUT)
     except Exception as e:
         print(f"Navigation or selector wait failed: {e}")
         # If we failed to click but we can still try direct navigation as a last resort
         if "m.dhlottery.co.kr" in page.url and "/login" not in page.url:
             print("Attempting emergency direct navigation to login page...")
             try:
-                page.goto("https://m.dhlottery.co.kr/user.do?method=login", timeout=20000, wait_until="load")
-                page.wait_for_selector("#inpUserId", timeout=10000)
+                page.goto("https://m.dhlottery.co.kr/user.do?method=login", timeout=GLOBAL_TIMEOUT, wait_until="load")
+                page.wait_for_selector("#inpUserId", timeout=GLOBAL_TIMEOUT)
             except:
                 raise e
         else:
@@ -261,7 +262,7 @@ def login(page: Page) -> None:
         print("Synchronizing session with game subdomain (el.dhlottery.co.kr)...")
         sync_url = "https://el.dhlottery.co.kr/common_mobile/do_sso.jsp"
         print(f"Navigating to sync URL: {sync_url}")
-        page.goto(sync_url, timeout=15000, wait_until="commit")
+        page.goto(sync_url, timeout=GLOBAL_TIMEOUT, wait_until="commit")
         print(f"Current URL: {page.url}")
         print("Subdomain session synchronization complete.")
     except Exception as e:
@@ -271,7 +272,7 @@ def login(page: Page) -> None:
     try:
         print("Returning to mobile home page...")
         home_url = "https://m.dhlottery.co.kr/common.do?method=main"
-        page.goto(home_url, timeout=15000, wait_until="commit")
+        page.goto(home_url, timeout=GLOBAL_TIMEOUT, wait_until="commit")
         print(f"Current URL: {page.url}")
         print("Navigation to home page successful.")
     except Exception as e:

@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from dotenv import load_dotenv
 from playwright.sync_api import Playwright, sync_playwright, Page
-from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS
+from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT
 
 import sys
 import traceback
@@ -18,14 +18,14 @@ def get_balance(page: Page) -> dict:
     마이페이지에서 예치금 잔액과 구매가능 금액을 조회합니다.
     """
     print("Navigating to My Page...")
-    page.goto("https://m.dhlottery.co.kr/mypage.do?method=home", timeout=30000, wait_until="commit")
+    page.goto("https://m.dhlottery.co.kr/mypage.do?method=home", timeout=GLOBAL_TIMEOUT, wait_until="commit")
     print(f"Current URL: {page.url}")
     
     # Check if redirected to login
     if "/login" in page.url or "method=login" in page.url:
         print("Redirection to login page detected. Attempting to log in again...")
         login(page)
-        page.goto("https://m.dhlottery.co.kr/mypage.do?method=home", timeout=30000, wait_until="commit")
+        page.goto("https://m.dhlottery.co.kr/mypage.do?method=home", timeout=GLOBAL_TIMEOUT, wait_until="commit")
         print(f"Current URL: {page.url}")
     
     print("Waiting for balance elements...")
@@ -35,7 +35,7 @@ def get_balance(page: Page) -> dict:
     # .pntDpstAmt: specific deposit amount class
     try:
         # Wait for any of the common indicators
-        page.wait_for_selector("#navTotalAmt, #totalAmt, .pntDpstAmt, #divCrntEntrsAmt", timeout=20000)
+        page.wait_for_selector("#navTotalAmt, #totalAmt, .pntDpstAmt, #divCrntEntrsAmt", timeout=GLOBAL_TIMEOUT)
     except Exception as e:
         print(f"Balance selectors not found immediately ({e}). Current page: {page.url}")
         # diagnostic: if we see login button, we are not logged in
