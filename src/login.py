@@ -268,6 +268,8 @@ def main():
             context = browser.new_context(
                 user_agent=DEFAULT_USER_AGENT,
                 viewport=DEFAULT_VIEWPORT,
+        is_mobile=True,
+        has_touch=True,
                 extra_http_headers=DEFAULT_HEADERS
             )
             page = context.new_page()

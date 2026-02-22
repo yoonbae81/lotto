@@ -117,9 +117,9 @@ def charge_deposit(page: Page, amount: int) -> bool:
         page.goto("https://m.dhlottery.co.kr/mypage/mndpChrg", timeout=GLOBAL_TIMEOUT, wait_until="networkidle")
 
     # 충전 금액 선택
-    amount_map = {5000: "5,000", 10000: "10,000", 20000: "20,000", 30000: "30,000", 50000: "50,000"}
+    amount_map = {1000: "1,000", 2000: "2,000", 3000: "3,000", 4000: "4,000", 5000: "5,000", 10000: "10,000", 20000: "20,000", 30000: "30,000", 50000: "50,000"}
     if amount not in amount_map:
-        print(f"Error: Invalid amount {amount}")
+        print(f"Error: Invalid amount {amount}. Supported amounts: {sorted(amount_map.keys())}")
         return False
         
     page.select_option("select#EcAmt", label=f"{amount_map[amount]}원")
@@ -143,8 +143,9 @@ def charge_deposit(page: Page, amount: int) -> bool:
     print(f"Entering PIN...")
     for digit in CHARGE_PIN:
         if digit in number_map:
-            number_map[digit].click()
-            time.sleep(0.1) # 속도 향상
+            box = number_map[digit].bounding_box()
+            page.touchscreen.tap(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+            time.sleep(0.5)
         else:
             print(f"Digit {digit} not found")
             return False
@@ -155,7 +156,7 @@ def charge_deposit(page: Page, amount: int) -> bool:
     try:
         # 1. URL 변화 확인 (result=OK)
         # 2. 완료 팝업 확인 (#btnAlertPop)
-        success_selector = "button#btnAlertPop, .btn_confirm, text='완료되었습니다', text='OK'"
+        success_selector = "button#btnAlertPop, .btn_confirm, :text('완료되었습니다'), :text('OK')"
         page.wait_for_selector(success_selector, state="visible", timeout=20000)
         
         msg = page.locator("body").inner_text()
@@ -170,6 +171,7 @@ def charge_deposit(page: Page, amount: int) -> bool:
             return False
     except Exception as e:
         print(f"Verification timed out or failed: {e}")
+        page.screenshot(path="charge_failed_verify.png")
         # URL이라도 확인
         if "result=OK" in page.url:
             print("Charge likely successful (URL result=OK)")
@@ -177,7 +179,7 @@ def charge_deposit(page: Page, amount: int) -> bool:
         return False
 
 def run(playwright: Playwright, amount: int, sr: ScriptReporter):
-    HEADLESS = os.environ.get('HEADLESS', 'false').lower() == 'true'
+    HEADLESS = os.environ.get('HEADLESS', 'true').lower() == 'true'
     
     browser = playwright.chromium.launch(headless=HEADLESS, slow_mo=0 if HEADLESS else 200)
     storage_state = SESSION_PATH if Path(SESSION_PATH).exists() else None
@@ -185,6 +187,8 @@ def run(playwright: Playwright, amount: int, sr: ScriptReporter):
         storage_state=storage_state,
         user_agent=DEFAULT_USER_AGENT,
         viewport=DEFAULT_VIEWPORT,
+        is_mobile=True,
+        has_touch=True,
         extra_http_headers=DEFAULT_HEADERS
     )
     page = context.new_page()

@@ -43,7 +43,7 @@ echo "Checking balance..."
 BALANCE_OUTPUT=$(cat balance.log)
 rm balance.log
 
-AVAILABLE_AMOUNT=$(echo "$BALANCE_OUTPUT" | grep "Available Amount:" | sed 's/[^0-9]//g')
+AVAILABLE_AMOUNT=$(echo "$BALANCE_OUTPUT" | grep "__RESULT__" | grep -o '"available_amount": \?[0-9]*' | tr -dc '0-9')
 
 if [ -z "$AVAILABLE_AMOUNT" ]; then
     echo "Error: Could not parse available amount"
@@ -69,12 +69,12 @@ else
 fi
 
 # Step 4: Buy Lotto 645
-# if [ "$BUY_645" = true ]; then
-#     echo "Buying Lotto 645..."
-#     "$VENV_PYTHON" "$PROJECT_DIR/src/lotto645.py"
-# else
-#     echo "Skipping Lotto 645"
-# fi
+if [ "$BUY_645" = true ]; then
+    echo "Buying Lotto 645..."
+    "$VENV_PYTHON" "$PROJECT_DIR/src/lotto645.py"
+else
+    echo "Skipping Lotto 645"
+fi
 
 echo ""
 echo "All tasks completed successfully!"

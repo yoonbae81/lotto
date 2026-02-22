@@ -114,6 +114,8 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
         storage_state=storage_state, 
         user_agent=DEFAULT_USER_AGENT,
         viewport=DEFAULT_VIEWPORT,
+        is_mobile=True,
+        has_touch=True,
         extra_http_headers=DEFAULT_HEADERS
     )
     
