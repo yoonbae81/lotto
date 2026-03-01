@@ -53,7 +53,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
         
         # 2. Navigate to Game Page
         sr.stage("NAVIGATE")
-        print(f"Navigating to Lotto 720 game: {GAME_URL}")
+        print(f"Navigating to Pension 720 game: {GAME_URL}")
         try:
             # Use domcontentloaded for faster loading
             page.goto(GAME_URL, timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
@@ -65,7 +65,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
                 page.goto(GAME_URL, timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
         except Exception as e:
             print(f"Navigation failed: {e}")
-            page.screenshot(path=f"lotto720_nav_failed_{int(time.time())}.png")
+            page.screenshot(path=f"pension720_nav_failed_{int(time.time())}.png")
             raise e
 
         # Give a small moment for components to initialize
@@ -82,7 +82,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
             page.locator("a.btn_gray_st1.large.full, a:has-text('번호 선택하기')").first.click()
         except Exception as e:
             print(f"Selection button not found/clickable: {e}")
-            page.screenshot(path=f"lotto720_select_btn_failed_{int(time.time())}.png")
+            page.screenshot(path=f"pension720_select_btn_failed_{int(time.time())}.png")
             raise e
         
         time.sleep(1) # Wait for animation
@@ -104,7 +104,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
             time.sleep(0.5)
         except Exception as e:
             print(f"Automatic selection failed: {e}")
-            page.screenshot(path=f"lotto720_auto_failed_{int(time.time())}.png")
+            page.screenshot(path=f"pension720_auto_failed_{int(time.time())}.png")
             raise e
         
         # Step 3: Confirm Selection
@@ -125,7 +125,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
             final_confirm = page.locator("a.btn_lgray.medium:has-text('확인'), a.btn_blue:has-text('확인'), a:has-text('확인')").first
             if final_confirm.is_visible(timeout=10000):
                 final_confirm.click()
-                print("Lotto 720: Purchase successful.")
+                print("Pension 720: Purchase successful.")
             else:
                 print("Result confirmation button not visible, assuming success if no error alert shown.")
         except Exception:
@@ -134,7 +134,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
     except Exception as e:
         print(f"Purchase flow interrupted: {e}")
         try:
-            page.screenshot(path=f"lotto720_error_{int(time.time())}.png")
+            page.screenshot(path=f"pension720_error_{int(time.time())}.png")
         except:
              pass
         raise
@@ -143,7 +143,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
         browser.close()
 
 if __name__ == "__main__":
-    sr = ScriptReporter("Lotto 720")
+    sr = ScriptReporter("Pension 720")
     try:
         with sync_playwright() as playwright:
             run(playwright, sr)

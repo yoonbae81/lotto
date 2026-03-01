@@ -60,12 +60,12 @@ if [ "$AVAILABLE_AMOUNT" -lt "$MIN_REQUIRED" ]; then
     "$VENV_PYTHON" "$PROJECT_DIR/src/balance.py"
 fi
 
-# Step 3: Buy Lotto 720
+# Step 3: Buy Pension 720
 if [ "$BUY_720" = true ]; then
-    echo "Buying Lotto 720..."
-    "$VENV_PYTHON" "$PROJECT_DIR/src/lotto720.py"
+    echo "Buying Pension 720..."
+    "$VENV_PYTHON" "$PROJECT_DIR/src/pension720.py"
 else
-    echo "Skipping Lotto 720"
+    echo "Skipping Pension 720"
 fi
 
 # Step 4: Buy Lotto 645
