@@ -3,8 +3,8 @@ Description=Lotto Auto Purchase Timer - Every Sunday 09:00 AM KST
 Requires=lotto.service
 
 [Timer]
-# Every Sunday at 09:00 AM KST
-OnCalendar=Sun *-*-* 09:00:00 Asia/Seoul
+# Every Saturday at 09:00 AM KST
+OnCalendar=Sat *-*-* 09:00:00 Asia/Seoul
 Persistent=true
 
 [Install]
