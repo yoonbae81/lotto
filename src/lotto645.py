@@ -118,6 +118,30 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
         has_touch=True,
         extra_http_headers=DEFAULT_HEADERS
     )
+
+    def check_mobile_purchase_restriction(page) -> tuple[bool, str]:
+        """
+        모바일 로또645 구매 가능 여부를 조회합니다.
+
+        Returns:
+            tuple[bool, str]: (구매제한 여부, 요일/메시지)
+        """
+        try:
+            resp = page.request.get("https://m.dhlottery.co.kr/selectMobPrchsCheck.do", timeout=GLOBAL_TIMEOUT)
+            if not resp.ok:
+                return False, ""
+
+            payload = resp.json()
+            result = payload.get("data", {}).get("result", {})
+            # Site JS logic:
+            # mobPrchs == "1"  => 모바일 구매 제한
+            # mobPrchs != "1"  => 구매 가능
+            if str(result.get("mobPrchs", "")) == "1":
+                return True, str(result.get("nowDay", "")).strip()
+            return False, ""
+        except Exception:
+            # If this check fails, continue normal flow and rely on page validation.
+            return False, ""
     
     try:
         page = context.new_page()
@@ -132,6 +156,14 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
             login(page)
         else:
             print("Session is valid.")
+
+        # 1.5 Mobile purchase day restriction check (Sat/Sun)
+        restricted, now_day = check_mobile_purchase_restriction(page)
+        if restricted:
+            day_msg = now_day if now_day else "토/일요일"
+            msg = f"{day_msg}에는 로또6/45 모바일 구매가 제한됩니다."
+            print(msg)
+            return {"processed_count": 0, "status": "failed", "reason": "mobile_restricted", "message": msg}
         
         # 2. Navigate to Game Page
         sr.stage("NAVIGATE")
@@ -145,6 +177,12 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
                 print("Session lost during navigation. Re-logging in...")
                 login(page)
                 page.goto(GAME_URL, timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
+
+            # If still not on game page, fail early with an explicit reason.
+            if "ol.dhlottery.co.kr/olotto/game_mobile/game645.do" not in page.url:
+                print(f"Unexpected redirect while opening Lotto 6/45: {page.url}")
+                page.screenshot(path=f"lotto645_unexpected_redirect_{int(time.time())}.png")
+                return {"processed_count": 0, "status": "failed", "reason": "unexpected_redirect", "url": page.url}
         except Exception as e:
             print(f"Navigation failed: {e}")
             page.screenshot(path=f"lotto645_nav_failed_{int(time.time())}.png")
@@ -369,6 +407,7 @@ if __name__ == "__main__":
                 sr.success(process_result)
             else:
                 sr.fail(f"Purchase failed or status unknown: {process_result}")
+                sys.exit(1)
             
     except Exception as e:
         sr.fail(traceback.format_exc())
