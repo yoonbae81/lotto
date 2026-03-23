@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
-import json
 import time
-import re
 from os import environ
 from pathlib import Path
-from dotenv import load_dotenv
-from playwright.sync_api import Playwright, sync_playwright
-from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT, setup_dialog_handler
+from typing import Optional
+
+from playwright.sync_api import Page, Playwright, sync_playwright
+
+from login import (
+    DEFAULT_HEADERS,
+    DEFAULT_USER_AGENT,
+    DEFAULT_VIEWPORT,
+    GLOBAL_TIMEOUT,
+    SESSION_PATH,
+    login,
+    setup_dialog_handler,
+)
 
 import sys
 import traceback
@@ -15,7 +23,67 @@ from script_reporter import ScriptReporter
 # .env loading is handled by login module import
 
 
-def run(playwright: Playwright, sr: ScriptReporter) -> None:
+def get_visible_result_text(page: Page) -> str:
+    """
+    구매 결과 팝업/페이지에 노출된 텍스트를 수집합니다.
+    """
+    selectors = [
+        "#popupLayerAlert",
+        "#popupLayerConfirm",
+        ".popup_layer",
+        ".popup_wrap",
+        ".layer_popup",
+        "#result",
+        "#report",
+    ]
+
+    for selector in selectors:
+        locator = page.locator(selector).first
+        try:
+            if locator.is_visible(timeout=1000):
+                return locator.inner_text().strip()
+        except Exception:
+            continue
+
+    try:
+        return page.locator("body").inner_text()
+    except Exception:
+        return ""
+
+
+def is_purchase_success(result_text: str) -> bool:
+    success_markers = [
+        "연금복권720+ 구매완료",
+        "구매가 완료되었습니다",
+        "구매를 완료하였습니다",
+        "구매완료",
+        "구매 완료",
+    ]
+    return any(marker in result_text for marker in success_markers)
+
+
+def detect_failure_reason(result_text: str) -> Optional[str]:
+    failure_markers = {
+        "low_balance": ["예치금이 부족", "잔액이 부족"],
+        "limit_reached": ["구매한도", "한도 초과"],
+        "invalid_selection": ["선택된 번호가 없습니다", "번호를 선택", "선택해 주세요"],
+        "sold_out": ["판매가 마감", "구매 가능 시간이 아닙니다", "판매시간이 아닙니다"],
+    }
+
+    for reason, markers in failure_markers.items():
+        if any(marker in result_text for marker in markers):
+            return reason
+
+    if "연금복권720+ 구매하기" in result_text and "구매가 완료되었습니다" not in result_text:
+        compact_text = result_text.replace("\n", " ")
+        if "보유중인 예치금 0원" in compact_text:
+            return "low_balance"
+        return "purchase_not_completed"
+
+    return None
+
+
+def run(playwright: Playwright, sr: ScriptReporter) -> dict:
     """
     연금복권 720+를 구매합니다.
     '모든 조'를 선택하여 임의의 번호로 5매(5,000원)를 구매합니다.
@@ -76,7 +144,6 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
         
         # Step 1: Open Number Selection
         print("Opening selection options...")
-        select_btn = page.locator("a.btn_gray_st1.large.full, a:has-text('번호 선택하기')").visible=True
         try:
             page.wait_for_selector("a.btn_gray_st1.large.full, a:has-text('번호 선택하기')", state="visible", timeout=GLOBAL_TIMEOUT)
             page.locator("a.btn_gray_st1.large.full, a:has-text('번호 선택하기')").first.click()
@@ -115,21 +182,74 @@ def run(playwright: Playwright, sr: ScriptReporter) -> None:
         # Step 4: Final Purchase
         print("Clicking 'Purchase' (구매하기)...")
         page.locator("a.btn_blue.large.full:has-text('구매하기'), a:has-text('구매하기')").first.click()
-        
+
         # Step 5: Verify Result
+        sr.stage("VERIFY_RESULT")
         print("Verifying success...")
         try:
-            # Wait for results modal or confirmation
-            # The dialog handler should have accepted the initial 'Are you sure?' alert.
-            # Now we look for the final confirm button in the result popup.
-            final_confirm = page.locator("a.btn_lgray.medium:has-text('확인'), a.btn_blue:has-text('확인'), a:has-text('확인')").first
-            if final_confirm.is_visible(timeout=10000):
-                final_confirm.click()
-                print("Pension 720: Purchase successful.")
-            else:
-                print("Result confirmation button not visible, assuming success if no error alert shown.")
-        except Exception:
-             print("Result confirmation timeout. Login/Balance may need check.")
+            page.wait_for_function(
+                """
+                () => {
+                    const text = document.body ? document.body.innerText : "";
+                    const selectors = [
+                        "#popupLayerAlert",
+                        "#popupLayerConfirm",
+                        ".popup_layer",
+                        ".popup_wrap",
+                        ".layer_popup",
+                        "#result",
+                        "#report",
+                    ];
+                    const hasVisibleLayer = selectors.some((selector) => {
+                        const el = document.querySelector(selector);
+                        return el && el.offsetParent !== null;
+                    });
+                    const markers = [
+                        "연금복권720+ 구매완료",
+                        "구매가 완료되었습니다",
+                        "구매를 완료하였습니다",
+                        "예치금이 부족",
+                        "잔액이 부족",
+                        "구매한도",
+                        "선택된 번호가 없습니다",
+                        "번호를 선택",
+                        "판매시간",
+                        "마감",
+                    ];
+                    return hasVisibleLayer || markers.some((marker) => text.includes(marker));
+                }
+                """,
+                timeout=15000,
+            )
+        except Exception as e:
+            print(f"Result UI did not appear in time: {e}")
+            page.screenshot(path=f"pension720_verify_failed_{int(time.time())}.png")
+            return {"processed_count": 0, "status": "unknown", "reason": "result_timeout"}
+
+        page.screenshot(path=f"pension720_result_{int(time.time())}.png")
+        result_text = get_visible_result_text(page)
+        print(f"Result text: {result_text}")
+
+        failure_reason = detect_failure_reason(result_text)
+        if failure_reason:
+            print(f"Pension 720 purchase failed: {failure_reason}")
+            return {"processed_count": 0, "status": "failed", "reason": failure_reason, "message": result_text}
+
+        if is_purchase_success(result_text):
+            final_confirm = page.locator(
+                "#popupLayerAlert button:has-text('확인'), #popupLayerConfirm button:has-text('확인'), a.btn_lgray.medium:has-text('확인'), a.btn_blue:has-text('확인'), a:has-text('확인')"
+            ).first
+            try:
+                if final_confirm.is_visible(timeout=2000):
+                    final_confirm.click()
+            except Exception as e:
+                print(f"Final confirm click skipped: {e}")
+
+            print("Pension 720: Purchase success confirmed by result UI.")
+            return {"processed_count": 5, "status": "success", "message": result_text}
+
+        print("Purchase result ambiguous.")
+        return {"processed_count": 0, "status": "ambiguous", "message": result_text}
 
     except Exception as e:
         print(f"Purchase flow interrupted: {e}")
@@ -146,8 +266,12 @@ if __name__ == "__main__":
     sr = ScriptReporter("Pension 720")
     try:
         with sync_playwright() as playwright:
-            run(playwright, sr)
-            sr.success({"processed_count": 5})
+            process_result = run(playwright, sr)
+            if process_result.get("status") == "success":
+                sr.success(process_result)
+            else:
+                sr.fail(f"Purchase failed or status unknown: {process_result}")
+                sys.exit(1)
     except Exception:
         sr.fail(traceback.format_exc())
         sys.exit(1)
