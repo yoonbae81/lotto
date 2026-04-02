@@ -7,13 +7,17 @@ from typing import Optional
 from playwright.sync_api import Page, Playwright, sync_playwright
 
 from login import (
+    click_first_available,
     DEFAULT_HEADERS,
     DEFAULT_USER_AGENT,
     DEFAULT_VIEWPORT,
+    dismiss_popups,
     GLOBAL_TIMEOUT,
+    get_amount_from_text,
     SESSION_PATH,
     login,
     setup_dialog_handler,
+    wait_for_text_markers,
 )
 
 import sys
@@ -138,6 +142,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
 
         # Give a small moment for components to initialize
         time.sleep(1)
+        dismiss_popups(page)
         
         # 3. Purchase Flow
         sr.stage("PURCHASE_PROCESS")
@@ -145,8 +150,16 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
         # Step 1: Open Number Selection
         print("Opening selection options...")
         try:
-            page.wait_for_selector("a.btn_gray_st1.large.full, a:has-text('번호 선택하기')", state="visible", timeout=GLOBAL_TIMEOUT)
-            page.locator("a.btn_gray_st1.large.full, a:has-text('번호 선택하기')").first.click()
+            click_first_available(
+                page,
+                [
+                    "a.btn_gray_st1.large.full:has-text('번호 선택하기')",
+                    "a:has-text('+ 번호 선택하기')",
+                    "a:has-text('번호 선택하기')",
+                ],
+                "Pension 720 selection button",
+            )
+            page.wait_for_selector("#popup4", state="visible", timeout=GLOBAL_TIMEOUT)
         except Exception as e:
             print(f"Selection button not found/clickable: {e}")
             page.screenshot(path=f"pension720_select_btn_failed_{int(time.time())}.png")
@@ -158,16 +171,31 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
         print("Ensuring 'All Jo' (모든조) is selected and clicking 'Automatic' (자동번호)...")
         try:
             # Select 'All Jo'
-            all_jo = page.locator("li:has-text('모든조'), span.group.all").first
+            all_jo = page.locator("#popup4 span.group.all, #popup4 .selGroup, #popup4 .group.all").first
             if all_jo.is_visible(timeout=2000):
                 all_jo.click()
                 time.sleep(0.3)
             
             # Click 'Automatic'
-            page.locator("a.btn_wht.xsmall:has-text('자동번호'), a:has-text('자동번호')").first.click()
-            
-            # Wait for any spinner to disappear
-            page.wait_for_selector("text=통신중입니다", state="hidden", timeout=5000)
+            click_first_available(
+                page,
+                [
+                    "#popup4 a.btn_wht.xsmall:has-text('자동번호')",
+                    "#popup4 a:has-text('자동번호')",
+                ],
+                "Pension 720 auto number button",
+            )
+
+            wait_for_text_markers(page, ["통신중입니다"], timeout=1500)
+            page.wait_for_function(
+                """
+                () => {
+                    const popup = document.querySelector('#popup4');
+                    return !!popup && /\\d/.test(popup.innerText || '');
+                }
+                """,
+                timeout=5000,
+            )
             time.sleep(0.5)
         except Exception as e:
             print(f"Automatic selection failed: {e}")
@@ -176,34 +204,51 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
         
         # Step 3: Confirm Selection
         print("Confirming selection...")
-        page.locator("a.btn_blue.full.large:has-text('선택완료'), a:has-text('선택완료')").first.click()
+        click_first_available(
+            page,
+            [
+                "#popup4 a.btn_blue.full.large:has-text('선택완료')",
+                "#popup4 a:has-text('선택완료')",
+            ],
+            "Pension 720 selection confirm button",
+        )
         time.sleep(0.8)
+        page.wait_for_selector("#popup4", state="hidden", timeout=GLOBAL_TIMEOUT)
+
+        body_text = page.locator("body").inner_text()
+        scheduled_amount = get_amount_from_text(body_text, "결제 예정 금액")
+        selected_count = page.locator("text='삭제'").count()
+        if scheduled_amount != 5000 or selected_count < 5:
+            page.screenshot(path=f"pension720_selection_invalid_{int(time.time())}.png")
+            raise RuntimeError(
+                f"Selection did not settle correctly. amount={scheduled_amount}, selected_count={selected_count}"
+            )
 
         # Step 4: Final Purchase
         print("Clicking 'Purchase' (구매하기)...")
-        page.locator("a.btn_blue.large.full:has-text('구매하기'), a:has-text('구매하기')").first.click()
+        click_first_available(
+            page,
+            [
+                "a.btn_blue.large.full:has-text('구매하기')",
+                "a:has-text('구매하기')",
+            ],
+            "Pension 720 buy button",
+        )
 
         # Step 5: Verify Result
         sr.stage("VERIFY_RESULT")
         print("Verifying success...")
         try:
+            page.wait_for_load_state("networkidle", timeout=5000)
+        except Exception:
+            pass
+
+        try:
             page.wait_for_function(
                 """
                 () => {
                     const text = document.body ? document.body.innerText : "";
-                    const selectors = [
-                        "#popupLayerAlert",
-                        "#popupLayerConfirm",
-                        ".popup_layer",
-                        ".popup_wrap",
-                        ".layer_popup",
-                        "#result",
-                        "#report",
-                    ];
-                    const hasVisibleLayer = selectors.some((selector) => {
-                        const el = document.querySelector(selector);
-                        return el && el.offsetParent !== null;
-                    });
+                    const selectors = ["#popupLayerAlert", "#popupLayerConfirm", ".popup_layer", ".popup_wrap", ".layer_popup", "#result", "#report"];
                     const markers = [
                         "연금복권720+ 구매완료",
                         "구매가 완료되었습니다",
@@ -214,12 +259,16 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
                         "선택된 번호가 없습니다",
                         "번호를 선택",
                         "판매시간",
-                        "마감",
+                        "판매가 마감",
+                        "주문번호",
                     ];
-                    return hasVisibleLayer || markers.some((marker) => text.includes(marker));
+                    return selectors.some((selector) => {
+                        const el = document.querySelector(selector);
+                        return el && el.offsetParent !== null;
+                    }) || markers.some((marker) => text.includes(marker));
                 }
                 """,
-                timeout=15000,
+                timeout=30000,
             )
         except Exception as e:
             print(f"Result UI did not appear in time: {e}")

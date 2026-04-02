@@ -4,6 +4,7 @@ import time
 import re
 from os import environ
 from pathlib import Path
+from typing import Iterable, Optional
 from dotenv import load_dotenv
 from playwright.sync_api import Page, Playwright
 import sys
@@ -82,19 +83,94 @@ def setup_dialog_handler(page: Page):
 def dismiss_popups(page: Page):
     """Dismiss common mobile popups that might block clicks."""
     try:
-        # On mobile, popups often have specific close buttons
-        # visible=true is a bit slow, so we use a faster selector first
-        close_buttons = page.locator(".btn_close, .close, .btn_pop_close, button:has-text('닫기'), a:has-text('오늘 하루 보지 않기')")
+        close_buttons = page.locator(
+            ".btn_close, .btn_pop_close, .btn-pop-close, "
+            "button:has-text('닫기'), a:has-text('닫기'), "
+            "button:has-text('오늘 하루 보지 않기'), a:has-text('오늘 하루 보지 않기'), "
+            "#popupLayerEvent button:has-text('닫기'), #popupLayerEvent .btn-pop-close, "
+            "#popupLayerAlert .btn-pop-close, #popupLayerConfirm .btn-pop-close"
+        )
         count = close_buttons.count()
         for i in range(count):
             try:
                 btn = close_buttons.nth(i)
                 if btn.is_visible(timeout=500):
-                    btn.click(timeout=1000)
-            except:
+                    btn.click(timeout=1000, force=True)
+                    time.sleep(0.2)
+            except Exception:
                 pass
     except Exception:
         pass
+
+
+def click_first_available(
+    page: Page,
+    selectors: Iterable[str],
+    description: str,
+    timeout: int = GLOBAL_TIMEOUT,
+) -> str:
+    """
+    여러 후보 셀렉터 중 현재 클릭 가능한 첫 요소를 눌러 안정적으로 진행합니다.
+    """
+    last_error: Optional[Exception] = None
+    end_time = time.time() + (timeout / 1000)
+
+    while time.time() < end_time:
+        dismiss_popups(page)
+        for selector in selectors:
+            locator = page.locator(selector).first
+            try:
+                if not locator.is_visible(timeout=300):
+                    continue
+                locator.scroll_into_view_if_needed(timeout=1000)
+                locator.click(timeout=1500)
+                return selector
+            except Exception as exc:
+                last_error = exc
+                try:
+                    locator.click(timeout=1500, force=True)
+                    return selector
+                except Exception as force_exc:
+                    last_error = force_exc
+        time.sleep(0.25)
+
+    raise TimeoutError(f"{description} click failed. Last error: {last_error}")
+
+
+def wait_for_text_markers(
+    page: Page,
+    markers: Iterable[str],
+    timeout: int = GLOBAL_TIMEOUT,
+) -> bool:
+    """
+    body 텍스트에 특정 마커가 등장할 때까지 기다립니다.
+    """
+    marker_list = [marker for marker in markers if marker]
+    if not marker_list:
+        return False
+
+    script = """
+    (markers) => {
+        const text = document.body ? document.body.innerText : "";
+        return markers.some((marker) => text.includes(marker));
+    }
+    """
+    try:
+        page.wait_for_function(script, marker_list, timeout=timeout)
+        return True
+    except Exception:
+        return False
+
+
+def get_amount_from_text(text: str, label: str) -> Optional[int]:
+    """
+    라벨 다음에 보이는 금액을 정수로 파싱합니다.
+    """
+    pattern = rf"{re.escape(label)}\s*([0-9,]+)원"
+    match = re.search(pattern, text.replace("\n", " "))
+    if not match:
+        return None
+    return int(match.group(1).replace(",", ""))
 
 
 
@@ -291,4 +367,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
