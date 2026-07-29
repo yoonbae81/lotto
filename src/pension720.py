@@ -55,6 +55,11 @@ def get_visible_result_text(page: Page) -> str:
         return ""
 
 
+def trim_purchase_receipt(result_text: str) -> str:
+    """구매 영수증 뒤에 붙는 공통 안내/푸터 문구를 제거합니다."""
+    return result_text.split("구매 한도액 안내", maxsplit=1)[0].strip()
+
+
 def is_purchase_success(result_text: str) -> bool:
     success_markers = [
         "연금복권720+ 구매완료",
@@ -276,7 +281,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
             return {"processed_count": 0, "status": "unknown", "reason": "result_timeout"}
 
         page.screenshot(path=f"pension720_result_{int(time.time())}.png")
-        result_text = get_visible_result_text(page)
+        result_text = trim_purchase_receipt(get_visible_result_text(page))
         print(f"Result text: {result_text}")
 
         failure_reason = detect_failure_reason(result_text)
@@ -295,6 +300,8 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
                 print(f"Final confirm click skipped: {e}")
 
             print("Pension 720: Purchase success confirmed by result UI.")
+            if "구매실패건이 없습니다" in result_text:
+                return {"processed_count": 5, "status": "success"}
             return {"processed_count": 5, "status": "success", "message": result_text}
 
         print("Purchase result ambiguous.")

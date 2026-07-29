@@ -1,12 +1,12 @@
 #!/bin/bash
 # Lotto Auto Purchase - Main Workflow Script
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Use VENV_PYTHON if set, otherwise default to .venv python
-if [ -z "$VENV_PYTHON" ]; then
+if [ -z "${VENV_PYTHON:-}" ]; then
     VENV_PYTHON="$PROJECT_DIR/.venv/bin/python"
 fi
 
@@ -39,9 +39,13 @@ echo "Logging in and saving session..."
 # Step 1: Check balance
 echo "Checking balance..."
 # Using tee to show output in real-time while capturing it
-"$VENV_PYTHON" "$PROJECT_DIR/src/balance.py" 2>&1 | tee balance.log
+if ! "$VENV_PYTHON" "$PROJECT_DIR/src/balance.py" 2>&1 | tee balance.log; then
+    rm -f balance.log
+    echo "Error: Balance check failed; purchase workflow stopped."
+    exit 1
+fi
 BALANCE_OUTPUT=$(cat balance.log)
-rm balance.log
+rm -f balance.log
 
 AVAILABLE_AMOUNT=$(echo "$BALANCE_OUTPUT" | grep "__RESULT__" | grep -o '"available_amount": \?[0-9]*' | tr -dc '0-9')
 
@@ -78,4 +82,3 @@ fi
 
 echo ""
 echo "All tasks completed successfully!"
-

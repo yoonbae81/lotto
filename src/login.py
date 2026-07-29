@@ -51,6 +51,16 @@ DEFAULT_HEADERS = {
     "Sec-CH-UA-Platform": '"iOS"'
 }
 GLOBAL_TIMEOUT = 10000 # 10 seconds global timeout for better reliability
+PASSWORD_EXPIRY_PATH = "/mbrsrvc/ExpryPswdNoti"
+
+
+def raise_if_password_expired(page: Page) -> None:
+    """비밀번호 만료 안내 페이지는 로그인 성공으로 처리하지 않습니다."""
+    if PASSWORD_EXPIRY_PATH in page.url:
+        raise Exception(
+            "Login blocked: the Donghaeng Lottery password has expired. "
+            "Change the password on the website, update PASSWD in .env, then run again."
+        )
 
 def save_session(context, path=SESSION_PATH):
     """
@@ -297,6 +307,7 @@ def login(page: Page) -> None:
             if check_logged_in_elements(page, timeout=500):
                 success = True
                 break
+            raise_if_password_expired(page)
             # If we see an error message, stop early
             if page.get_by_text("아이디 또는 비밀번호가 일치하지 않습니다").is_visible(timeout=100):
                 raise Exception("Invalid credentials.")
@@ -314,6 +325,7 @@ def login(page: Page) -> None:
 
     except Exception:
         print("Login verification timed out. Checking content...")
+        raise_if_password_expired(page)
         if check_logged_in_elements(page, timeout=2000):
              print('Logged in successfully (detected via check helper)')
         else:

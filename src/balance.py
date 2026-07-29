@@ -5,11 +5,53 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 from playwright.sync_api import Playwright, sync_playwright, Page
-from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT
+from login import (
+    login,
+    SESSION_PATH,
+    DEFAULT_USER_AGENT,
+    DEFAULT_VIEWPORT,
+    DEFAULT_HEADERS,
+    GLOBAL_TIMEOUT,
+)
 
 import sys
 import traceback
 from script_reporter import ScriptReporter
+
+
+MY_PAGE_URL = "https://m.dhlottery.co.kr/mypage/home"
+BALANCE_SELECTORS = ["#navTotalAmt", ".pntDpstAmt", ".header_money"]
+LOGIN_FORM_SELECTOR = "#inpUserId, #inpUserPswdEncn, #btnLogin"
+
+
+def is_login_form_visible(page: Page) -> bool:
+    """URL과 무관하게 현재 로그인 폼이 표시되는지 확인합니다."""
+    try:
+        return page.locator(LOGIN_FORM_SELECTOR).first.is_visible(timeout=1000)
+    except Exception:
+        return False
+
+
+def wait_for_balance_or_login(page: Page) -> bool:
+    """잔액 영역 또는 로그인 폼이 표시될 때까지 기다립니다.
+
+    Returns:
+        True when a balance element is visible, False when login is required.
+    """
+    deadline = time.time() + (GLOBAL_TIMEOUT / 1000)
+    while time.time() < deadline:
+        if is_login_form_visible(page):
+            return False
+
+        for selector in BALANCE_SELECTORS:
+            try:
+                if page.locator(selector).first.is_visible(timeout=300):
+                    return True
+            except Exception:
+                pass
+        time.sleep(0.25)
+
+    return False
 
 
 def get_balance(page: Page) -> dict:
@@ -18,7 +60,7 @@ def get_balance(page: Page) -> dict:
     """
     print("Navigating to My Page...")
     try:
-        page.goto("https://m.dhlottery.co.kr/mypage/home", timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
+        page.goto(MY_PAGE_URL, timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
     except Exception as e:
         print(f"Navigation to My Page failed: {e}")
         page.screenshot(path=f"balance_nav_failed_{int(time.time())}.png")
@@ -26,27 +68,30 @@ def get_balance(page: Page) -> dict:
 
     print(f"Current URL: {page.url}")
     
-    # Check if redirected to login or error
-    if "/login" in page.url or "method=login" in page.url or "/errorPage" in page.url:
-        print("Not logged in. Redirected to login/error page. Attempting login...")
+    # The site can display the login form without a reliably identifiable URL.
+    # Treat the form itself as the source of truth, then revisit My Page.
+    balance_visible = wait_for_balance_or_login(page)
+    if not balance_visible and (
+        is_login_form_visible(page)
+        or "/login" in page.url
+        or "method=login" in page.url
+        or "/errorPage" in page.url
+    ):
+        print("Authentication required. Attempting login...")
         login(page)
-        # Re-navigate after login
-        page.goto("https://m.dhlottery.co.kr/mypage/home", timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
-    
-    # Try to find balance information
-    try:
-        # Wait for either total amount or deposit amount to be visible
-        page.wait_for_selector("#navTotalAmt, .pntDpstAmt, .header_money", state="visible", timeout=GLOBAL_TIMEOUT)
-    except Exception as e:
-        print(f"Balance elements not visible: {e}")
+        page.goto(MY_PAGE_URL, timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
+        balance_visible = wait_for_balance_or_login(page)
+
+    if not balance_visible:
+        print(f"Balance elements not visible. Current URL: {page.url}")
         page.screenshot(path=f"balance_elements_failed_{int(time.time())}.png")
-        # Final check if we are actually logged in
-        if "/login" in page.url:
-             raise Exception("Authentication required to view balance.")
+        if is_login_form_visible(page) or "/login" in page.url:
+            raise Exception("Authentication required to view balance after login attempt.")
+        raise TimeoutError("Timed out waiting for balance elements on My Page.")
 
     # 1. Get deposit balance (예치금 잔액)
     # Mobile Specific: #navTotalAmt is common for total, .pntDpstAmt for deposit
-    deposit_selectors = ["#navTotalAmt", ".pntDpstAmt", ".header_money"]
+    deposit_selectors = BALANCE_SELECTORS
     deposit_text = "0"
     for selector in deposit_selectors:
         try:
