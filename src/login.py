@@ -42,6 +42,10 @@ USER_ID = environ.get('USER_ID')
 PASSWD = environ.get('PASSWD')
 
 # Constants
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+RESULTS_DIR = PROJECT_ROOT / "results"
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
 SESSION_PATH = "/tmp/dhlotto_session.json"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1"
 DEFAULT_VIEWPORT = {"width": 393, "height": 852}

@@ -17,6 +17,7 @@ from login import (
     DEFAULT_VIEWPORT,
     dismiss_popups,
     GLOBAL_TIMEOUT,
+    RESULTS_DIR,
     SESSION_PATH,
     login,
     setup_dialog_handler,
@@ -409,7 +410,7 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
             )
             
             # Final result screenshot
-            page.screenshot(path=f"lotto645_result_{int(time.time())}.png")
+            page.screenshot(path=str(RESULTS_DIR / f"lotto645_result_{int(time.time())}.png"))
             
             if page.locator("#report").is_visible():
                 print("Purchase success confirmed! (Receipt visible)")

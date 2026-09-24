@@ -14,6 +14,7 @@ from login import (
     dismiss_popups,
     GLOBAL_TIMEOUT,
     get_amount_from_text,
+    RESULTS_DIR,
     SESSION_PATH,
     login,
     setup_dialog_handler,
@@ -275,7 +276,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
             page.screenshot(path=f"pension720_verify_failed_{int(time.time())}.png")
             return {"processed_count": 0, "status": "unknown", "reason": "result_timeout"}
 
-        page.screenshot(path=f"pension720_result_{int(time.time())}.png")
+        page.screenshot(path=str(RESULTS_DIR / f"pension720_result_{int(time.time())}.png"))
         result_text = get_visible_result_text(page)
         print(f"Result text: {result_text}")
 
