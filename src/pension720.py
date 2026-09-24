@@ -17,6 +17,7 @@ from login import (
     RESULTS_DIR,
     SESSION_PATH,
     login,
+    CHROMIUM_ARGS,
     setup_dialog_handler,
     wait_for_text_markers,
 )
@@ -97,7 +98,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
     
     # Create browser, context, and page
     HEADLESS = environ.get('HEADLESS', 'true').lower() == 'true'
-    browser = playwright.chromium.launch(headless=HEADLESS)
+    browser = playwright.chromium.launch(headless=HEADLESS, args=CHROMIUM_ARGS)
 
     # Load session if exists
     storage_state = SESSION_PATH if Path(SESSION_PATH).exists() else None

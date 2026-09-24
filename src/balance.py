@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 from playwright.sync_api import Playwright, sync_playwright, Page
-from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT
+from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT, CHROMIUM_ARGS
 
 import sys
 import traceback
@@ -85,7 +85,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
     """로그인 후 잔액 정보를 조회합니다."""
     # Create browser, context, and page
     HEADLESS = os.environ.get('HEADLESS', 'true').lower() == 'true'
-    browser = playwright.chromium.launch(headless=HEADLESS)
+    browser = playwright.chromium.launch(headless=HEADLESS, args=CHROMIUM_ARGS)
 
     # Load session if exists
     storage_state = SESSION_PATH if Path(SESSION_PATH).exists() else None

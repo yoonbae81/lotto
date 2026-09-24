@@ -1,6 +1,5 @@
 [Unit]
 Description=Lotto Auto Purchase Timer - Every Monday 09:00 AM KST
-Requires=lotto.service
 
 [Timer]
 # Every Monday at 09:00 AM KST

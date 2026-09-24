@@ -55,6 +55,11 @@ DEFAULT_HEADERS = {
     "Sec-CH-UA-Platform": '"iOS"'
 }
 GLOBAL_TIMEOUT = 10000 # 10 seconds global timeout for better reliability
+CHROMIUM_ARGS = [
+    "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--no-sandbox",
+]
 
 def save_session(context, path=SESSION_PATH):
     """
@@ -344,7 +349,7 @@ def main():
         try:
             print("Launching browser for initial login...")
             HEADLESS = os.environ.get('HEADLESS', 'true').lower() == 'true'
-            browser = playwright.chromium.launch(headless=HEADLESS, slow_mo=0 if HEADLESS else 500)
+            browser = playwright.chromium.launch(headless=HEADLESS, slow_mo=0 if HEADLESS else 500, args=CHROMIUM_ARGS)
             context = browser.new_context(
                 user_agent=DEFAULT_USER_AGENT,
                 viewport=DEFAULT_VIEWPORT,
