@@ -170,3 +170,6 @@ Thumbs.db
 # Test results
 *.png
 results/
+
+# Agents/MCP
+.serena/
