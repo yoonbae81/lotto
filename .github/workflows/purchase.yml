@@ -2,44 +2,47 @@ name: Lotto Purchase (Run on GitHub)
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   # 매주 일요일 오전 9:00 KST (UTC 00:00)
-  #   - cron: '0 0 * * 0'
+  schedule:
+    # Every Monday 09:00 KST (= Monday 00:00 UTC). GitHub may start it a few minutes late.
+    - cron: '0 0 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lotto-purchase
+  cancel-in-progress: false
 
 jobs:
   purchase:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 30
+    env:
+      # Read by the scripts from the environment (python-dotenv does not override these).
+      USER_ID: ${{ secrets.USER_ID }}
+      PASSWD: ${{ secrets.PASSWD }}
+      CHARGE_PIN: ${{ secrets.CHARGE_PIN }}
+      AUTO_GAMES: ${{ vars.AUTO_GAMES }}
+      MANUAL_NUMBERS: ${{ vars.MANUAL_NUMBERS }}
+      REPORTER_DISCORD_WEBHOOK: ${{ vars.REPORTER_DISCORD_WEBHOOK }}
+      PYTHONPATH: src
+      VENV_PYTHON: python
+      TZ: Asia/Seoul
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.9'
-        cache: 'pip'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
 
-    - name: Install Dependencies
-      run: |
-        pip install -r requirements.txt
-        playwright install chromium
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
 
-    - name: Create .env file
-      run: |
-        echo "USER_ID=${{ secrets.USER_ID }}" >> .env
-        echo "PASSWD=${{ secrets.PASSWD }}" >> .env
-        echo "CHARGE_PIN=${{ secrets.CHARGE_PIN }}" >> .env
-        echo "AUTO_GAMES=${{ secrets.AUTO_GAMES || '0' }}" >> .env
-        echo "MANUAL_NUMBERS=${{ secrets.MANUAL_NUMBERS || '[]' }}" >> .env
-        # Check file capability without exposing content
-        ls -la .env
-
-    - name: Run Lotto Purchase Workflow
-      env:
-        PYTHONPATH: src
-        VENV_PYTHON: python  # Use system python set up by actions
-      run: |
-        chmod +x scripts/run.sh
-        bash scripts/run.sh
-  
+      - name: Run purchase workflow
+        run: bash scripts/run.sh
