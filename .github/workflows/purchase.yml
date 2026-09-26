@@ -3,8 +3,8 @@ name: Lotto Purchase (Run on GitHub)
 on:
   workflow_dispatch:
   schedule:
-    # TEMPORARY TEST: Saturday 09:50 KST (= 00:50 UTC). Restore to '0 0 * * 1' (Mon 09:00 KST) after the test.
-    - cron: '50 0 * * 6'
+    # Every Monday 09:00 KST (= Monday 00:00 UTC). GitHub may start it a few minutes late.
+    - cron: '0 0 * * 1'
 
 permissions:
   contents: read
