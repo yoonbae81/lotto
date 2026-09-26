@@ -339,11 +339,30 @@ def login(page: Page) -> None:
                  raise Exception("Login failed: Invalid ID or password.")
              else:
                  if "/login" in page.url:
-                      try:
-                          page.screenshot(path="login_verify_failed.png", full_page=True)
-                      except Exception:
-                          pass
-                      raise Exception(f"Login failed: Still on login page ({page.url})")
+                      # The submit click is sometimes silently ignored: retry a couple of times
+                      for attempt in (1, 2):
+                          print(f"Still on login page; retrying submit ({attempt}/2)...")
+                          try:
+                              if not page.locator("#inpUserId").input_value():
+                                  page.locator("#inpUserId").fill(USER_ID)
+                                  page.locator("#inpUserPswdEncn").fill(PASSWD)
+                              page.click("#btnLogin")
+                          except Exception as retry_err:
+                              print(f"Retry submit error: {retry_err}")
+                          deadline = time.time() + 20
+                          while time.time() < deadline:
+                              if check_logged_in_elements(page, timeout=500) or "/login" not in page.url:
+                                  break
+                              time.sleep(0.5)
+                          if "/login" not in page.url:
+                              print(f"Login succeeded on retry {attempt} (URL: {page.url})")
+                              break
+                      if "/login" in page.url:
+                          try:
+                              page.screenshot(path="login_verify_failed.png", full_page=True)
+                          except Exception:
+                              pass
+                          raise Exception(f"Login failed: Still on login page ({page.url})")
                  print(f"Assuming login might have worked (URL: {page.url})")
 
     # Give a bit more time for session cookies to be stable
