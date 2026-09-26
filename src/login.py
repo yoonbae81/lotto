@@ -6,6 +6,7 @@ from os import environ
 from pathlib import Path
 from typing import Iterable, Optional
 from dotenv import load_dotenv
+from tscale import T
 from playwright.sync_api import Page, Playwright
 import sys
 import traceback
@@ -54,6 +55,27 @@ DEFAULT_HEADERS = {
     "Sec-CH-UA-Mobile": "?1",
     "Sec-CH-UA-Platform": '"iOS"'
 }
+# Retry page.goto on transient network errors (slow/blackholed connections from remote runners)
+_orig_goto = Page.goto
+
+
+def _goto_with_retry(self, url, **kwargs):
+    last = None
+    for attempt in range(1, 4):
+        try:
+            return _orig_goto(self, url, **kwargs)
+        except Exception as e:
+            last = e
+            msg = str(e)
+            if "ERR_" not in msg and "Timeout" not in msg:
+                raise
+            print(f"goto retry {attempt}/3 after: {msg.splitlines()[0][:120]}")
+            time.sleep(3)
+    raise last
+
+
+Page.goto = _goto_with_retry
+
 GLOBAL_TIMEOUT = int(environ.get("GLOBAL_TIMEOUT_MS", "10000"))  # default 10s; raise on slow/remote runners
 CHROMIUM_ARGS = [
     "--disable-gpu",
@@ -103,8 +125,8 @@ def dismiss_popups(page: Page):
         for i in range(count):
             try:
                 btn = close_buttons.nth(i)
-                if btn.is_visible(timeout=500):
-                    btn.click(timeout=1000, force=True)
+                if btn.is_visible(timeout=T(500)):
+                    btn.click(timeout=T(1000), force=True)
                     time.sleep(0.2)
             except Exception:
                 pass
@@ -129,15 +151,15 @@ def click_first_available(
         for selector in selectors:
             locator = page.locator(selector).first
             try:
-                if not locator.is_visible(timeout=300):
+                if not locator.is_visible(timeout=T(300)):
                     continue
-                locator.scroll_into_view_if_needed(timeout=1000)
-                locator.click(timeout=1500)
+                locator.scroll_into_view_if_needed(timeout=T(1000))
+                locator.click(timeout=T(1500))
                 return selector
             except Exception as exc:
                 last_error = exc
                 try:
-                    locator.click(timeout=1500, force=True)
+                    locator.click(timeout=T(1500), force=True)
                     return selector
                 except Exception as force_exc:
                     last_error = force_exc
@@ -206,7 +228,7 @@ def is_logged_in(page: Page) -> bool:
     """
     try:
         # First check current page without navigation
-        if check_logged_in_elements(page, timeout=1000):
+        if check_logged_in_elements(page, timeout=T(1000)):
             return True
         
         # If we are on a page that strongly indicates login/logout state, trust it
@@ -226,7 +248,7 @@ def is_logged_in(page: Page) -> bool:
                 return True
         
         # Final visual check
-        return check_logged_in_elements(page, timeout=2000)
+        return check_logged_in_elements(page, timeout=T(2000))
     except Exception:
         return False
 
@@ -295,7 +317,7 @@ def login(page: Page) -> None:
         page.screenshot(path=screenshot_path)
         
         # Final fallback check
-        if check_logged_in_elements(page, timeout=3000):
+        if check_logged_in_elements(page, timeout=T(3000)):
             print("Detected login success despite submission error")
             return
         raise Exception(f"Login click failed: {e}")
@@ -307,7 +329,7 @@ def login(page: Page) -> None:
         success = False
         start_t = time.time()
         while time.time() - start_t < 30:
-            if check_logged_in_elements(page, timeout=500):
+            if check_logged_in_elements(page, timeout=T(500)):
                 success = True
                 break
             # Leaving /login for another dhlottery page also means login succeeded
@@ -315,7 +337,7 @@ def login(page: Page) -> None:
                 success = True
                 break
             # If we see an error message, stop early
-            if page.get_by_text("아이디 또는 비밀번호가 일치하지 않습니다").is_visible(timeout=100):
+            if page.get_by_text("아이디 또는 비밀번호가 일치하지 않습니다").is_visible(timeout=T(100)):
                 raise Exception("Invalid credentials.")
             time.sleep(0.5)
             
@@ -331,7 +353,7 @@ def login(page: Page) -> None:
 
     except Exception:
         print("Login verification timed out. Checking content...")
-        if check_logged_in_elements(page, timeout=2000):
+        if check_logged_in_elements(page, timeout=T(2000)):
              print('Logged in successfully (detected via check helper)')
         else:
              content = page.content()
@@ -351,7 +373,7 @@ def login(page: Page) -> None:
                               print(f"Retry submit error: {retry_err}")
                           deadline = time.time() + 20
                           while time.time() < deadline:
-                              if check_logged_in_elements(page, timeout=500) or "/login" not in page.url:
+                              if check_logged_in_elements(page, timeout=T(500)) or "/login" not in page.url:
                                   break
                               time.sleep(0.5)
                           if "/login" not in page.url:

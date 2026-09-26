@@ -4,6 +4,7 @@ from os import environ
 from pathlib import Path
 from typing import Optional
 
+from tscale import T
 from playwright.sync_api import Page, Playwright, sync_playwright
 
 from login import (
@@ -46,7 +47,7 @@ def get_visible_result_text(page: Page) -> str:
     for selector in selectors:
         locator = page.locator(selector).first
         try:
-            if locator.is_visible(timeout=1000):
+            if locator.is_visible(timeout=T(1000)):
                 return locator.inner_text().strip()
         except Exception:
             continue
@@ -174,7 +175,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
         try:
             # Select 'All Jo'
             all_jo = page.locator("#popup4 span.group.all, #popup4 .selGroup, #popup4 .group.all").first
-            if all_jo.is_visible(timeout=2000):
+            if all_jo.is_visible(timeout=T(2000)):
                 all_jo.click()
                 time.sleep(0.3)
             
@@ -188,7 +189,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
                 "Pension 720 auto number button",
             )
 
-            wait_for_text_markers(page, ["통신중입니다"], timeout=1500)
+            wait_for_text_markers(page, ["통신중입니다"], timeout=T(1500))
             page.wait_for_function(
                 """
                 () => {
@@ -196,7 +197,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
                     return !!popup && /\\d/.test(popup.innerText || '');
                 }
                 """,
-                timeout=5000,
+                timeout=T(5000),
             )
             time.sleep(0.5)
         except Exception as e:
@@ -241,7 +242,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
         sr.stage("VERIFY_RESULT")
         print("Verifying success...")
         try:
-            page.wait_for_load_state("networkidle", timeout=5000)
+            page.wait_for_load_state("networkidle", timeout=T(5000))
         except Exception:
             pass
 
@@ -270,7 +271,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
                     }) || markers.some((marker) => text.includes(marker));
                 }
                 """,
-                timeout=30000,
+                timeout=T(30000),
             )
         except Exception as e:
             print(f"Result UI did not appear in time: {e}")
@@ -291,7 +292,7 @@ def run(playwright: Playwright, sr: ScriptReporter) -> dict:
                 "#popupLayerAlert button:has-text('확인'), #popupLayerConfirm button:has-text('확인'), a.btn_lgray.medium:has-text('확인'), a.btn_blue:has-text('확인'), a:has-text('확인')"
             ).first
             try:
-                if final_confirm.is_visible(timeout=2000):
+                if final_confirm.is_visible(timeout=T(2000)):
                     final_confirm.click()
             except Exception as e:
                 print(f"Final confirm click skipped: {e}")

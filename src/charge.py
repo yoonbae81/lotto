@@ -5,6 +5,7 @@ import sys
 import time
 from pathlib import Path
 from dotenv import load_dotenv
+from tscale import T
 from playwright.sync_api import Playwright, sync_playwright, Page
 from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT, CHROMIUM_ARGS
 
@@ -157,7 +158,7 @@ def charge_deposit(page: Page, amount: int) -> bool:
         # 1. URL 변화 확인 (result=OK)
         # 2. 완료 팝업 확인 (#btnAlertPop)
         success_selector = "button#btnAlertPop, .btn_confirm, :text('완료되었습니다'), :text('OK')"
-        page.wait_for_selector(success_selector, state="visible", timeout=20000)
+        page.wait_for_selector(success_selector, state="visible", timeout=T(20000))
         
         msg = page.locator("body").inner_text()
         if "완료" in msg or "result=OK" in page.url:

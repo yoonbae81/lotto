@@ -4,6 +4,7 @@ import re
 import time
 from pathlib import Path
 from dotenv import load_dotenv
+from tscale import T
 from playwright.sync_api import Playwright, sync_playwright, Page
 from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT, CHROMIUM_ARGS
 
@@ -51,7 +52,7 @@ def get_balance(page: Page) -> dict:
     for selector in deposit_selectors:
         try:
             el = page.locator(selector).first
-            if el.is_visible(timeout=1000):
+            if el.is_visible(timeout=T(1000)):
                 deposit_text = el.inner_text().strip()
                 print(f" -> Found balance: '{deposit_text}' (via {selector})")
                 break
@@ -65,7 +66,7 @@ def get_balance(page: Page) -> dict:
     for selector in available_selectors:
         try:
             el = page.locator(selector).first
-            if el.is_visible(timeout=500):
+            if el.is_visible(timeout=T(500)):
                 available_text = el.inner_text().strip()
                 break
         except:

@@ -9,6 +9,7 @@ import datetime
 from os import environ
 from pathlib import Path
 from dotenv import load_dotenv
+from tscale import T
 from playwright.sync_api import Playwright, sync_playwright
 from login import (
     click_first_available,
@@ -276,14 +277,14 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
 
                 # Reset previous selection to ensure clean state (especially for identical games)
                 reset_btn = page.locator("#btnInit, #popupSelectNum button:has-text('초기화')").first
-                if reset_btn.is_visible(timeout=2000):
-                    reset_btn.click(timeout=1500, force=True)
+                if reset_btn.is_visible(timeout=T(2000)):
+                    reset_btn.click(timeout=T(1500), force=True)
                     time.sleep(0.5)
 
                 # Select each number
                 for number in numbers:
                     num_el = page.locator(f"xpath=//div[contains(@class, 'lt-num') and text()='{number}']").first
-                    if num_el.is_visible(timeout=2000):
+                    if num_el.is_visible(timeout=T(2000)):
                         num_el.click()
                         time.sleep(0.05)
                     else:
@@ -291,13 +292,13 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
                 
                 # Click '선택완료' to add to list
                 select_done = page.locator("#btnSelectNum, #popupSelectNum button:has-text('선택완료')").first
-                if select_done.is_visible(timeout=2000):
+                if select_done.is_visible(timeout=T(2000)):
                     current_count = get_actual_cart_count()
-                    select_done.click(timeout=1500, force=True)
+                    select_done.click(timeout=T(1500), force=True)
                     
                     # Handle "Already selected" or other alerts inside selection popup
                     alert = page.locator("#popupLayerAlert:visible")
-                    if alert.is_visible(timeout=2000):
+                    if alert.is_visible(timeout=T(2000)):
                         msg = alert.inner_text()
                         print(f"Alert during manual addition: {msg}")
                         alert.locator("button:has-text('확인')").click()
@@ -318,18 +319,18 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
                 # Confirm popup closed or handle "Already selected" alert
                 # The manual selection popup has an ID #popupSelectNum
                 confirm_btn = page.locator("#popupSelectNum button:has-text('확인'), #popupLayerAlert button:has-text('확인')").first
-                if confirm_btn.is_visible(timeout=2000):
+                if confirm_btn.is_visible(timeout=T(2000)):
                     confirm_btn.click()
                     print("Clicked confirmation in popup.")
                     time.sleep(0.8)
                 
                 # Wait for popup to be hidden to ensure we are back on the main page
                 try:
-                    page.wait_for_selector("#popupSelectNum", state="hidden", timeout=3000)
+                    page.wait_for_selector("#popupSelectNum", state="hidden", timeout=T(3000))
                 except:
                     # If it's still visible, try to click the close (X) button as fallback
                     close_btn = page.locator("#popupSelectNum .btn-pop-close").first
-                    if close_btn.is_visible(timeout=1000):
+                    if close_btn.is_visible(timeout=T(1000)):
                         close_btn.click()
                         time.sleep(0.5)
                 
@@ -375,8 +376,8 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
         
         try:
             # Explicitly wait for the confirm button to be visible and enabled
-            confirm_btn.wait_for(state="visible", timeout=5000)
-            confirm_btn.click(timeout=1500, force=True)
+            confirm_btn.wait_for(state="visible", timeout=T(5000))
+            confirm_btn.click(timeout=T(1500), force=True)
             print("Final confirmation clicked.")
         except Exception as e:
             print(f"Confirmation button click failed or not found: {e}")
@@ -407,7 +408,7 @@ def run(playwright: Playwright, auto_games: int, manual_numbers: list, sr: Scrip
                     }) || markers.some((marker) => text.includes(marker));
                 }
                 """,
-                timeout=30000,
+                timeout=T(30000),
             )
             
             # Final result screenshot

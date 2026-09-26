@@ -28,7 +28,8 @@ jobs:
       PYTHONPATH: src
       VENV_PYTHON: python
       TZ: Asia/Seoul
-      GLOBAL_TIMEOUT_MS: 45000
+      GLOBAL_TIMEOUT_MS: 60000
+      TIMEOUT_SCALE: 3
 
     steps:
       - uses: actions/checkout@v7
