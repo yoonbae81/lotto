@@ -119,10 +119,6 @@ rm ~/.config/systemd/user/lotto.{service,timer}
 systemctl --user daemon-reload
 ```
 
-### (선택) 코드 변경 시 서버 자동 배포
-
-서버 방식에서 `main`에 push하면 서버가 최신 코드를 받게 하려면 `scripts/deploy.sh`를 이용해 SSH 배포 워크플로를 별도로 구성할 수 있습니다. 이 저장소에는 배포 워크플로가 포함되어 있지 않으며, 기본은 서버에서 `git pull`로 갱신합니다.
-
 ---
 
 ## ☁️ Option B: GitHub Actions
