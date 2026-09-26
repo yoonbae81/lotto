@@ -54,7 +54,7 @@ DEFAULT_HEADERS = {
     "Sec-CH-UA-Mobile": "?1",
     "Sec-CH-UA-Platform": '"iOS"'
 }
-GLOBAL_TIMEOUT = 10000 # 10 seconds global timeout for better reliability
+GLOBAL_TIMEOUT = int(environ.get("GLOBAL_TIMEOUT_MS", "10000"))  # default 10s; raise on slow/remote runners
 CHROMIUM_ARGS = [
     "--disable-gpu",
     "--disable-dev-shm-usage",
