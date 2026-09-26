@@ -45,37 +45,55 @@ def get_balance(page: Page) -> dict:
         if "/login" in page.url:
              raise Exception("Authentication required to view balance.")
 
-    # 1. Get deposit balance (예치금 잔액)
-    # Mobile Specific: #navTotalAmt is common for total, .pntDpstAmt for deposit
-    deposit_selectors = ["#navTotalAmt", ".pntDpstAmt", ".header_money"]
-    deposit_text = "0"
-    for selector in deposit_selectors:
-        try:
-            el = page.locator(selector).first
-            if el.is_visible(timeout=T(1000)):
-                deposit_text = el.inner_text().strip()
-                print(f" -> Found balance: '{deposit_text}' (via {selector})")
+    # Amounts are filled in by JS after the page loads; the initial placeholder is "0".
+    # Wait for a non-zero value, reload once if it never appears, then accept 0 as real.
+    def read_amounts():
+        deposit_text = "0"
+        for selector in ["#navTotalAmt", ".pntDpstAmt", ".header_money"]:
+            try:
+                el = page.locator(selector).first
+                if el.is_visible(timeout=T(1000)):
+                    deposit_text = el.inner_text().strip()
+                    break
+            except Exception:
+                continue
+        available_text = deposit_text  # same as deposit if not found separately
+        for selector in ["#divCrntEntrsAmt", ".totalAmt", ".pntDpstAmt"]:
+            try:
+                el = page.locator(selector).first
+                if el.is_visible(timeout=T(500)):
+                    available_text = el.inner_text().strip()
+                    break
+            except Exception:
+                continue
+        return deposit_text, available_text
+
+    def to_int(text: str) -> int:
+        return int(re.sub(r"[^0-9]", "", text) or "0")
+
+    try:
+        page.wait_for_load_state("networkidle", timeout=T(5000))
+    except Exception:
+        pass
+
+    deposit_text, available_text = "0", "0"
+    for attempt in (1, 2):
+        deadline = time.time() + 20
+        while True:
+            deposit_text, available_text = read_amounts()
+            if to_int(deposit_text) > 0 or to_int(available_text) > 0 or time.time() > deadline:
                 break
-        except:
-            continue
-    
-    # 2. Extract specifically 'Available' if possible, otherwise use the found balance
-    # Often on mobile, the total deposit is what's displayed.
-    available_selectors = ["#divCrntEntrsAmt", ".totalAmt", ".pntDpstAmt"]
-    available_text = deposit_text # Default to same if not found separately
-    for selector in available_selectors:
-        try:
-            el = page.locator(selector).first
-            if el.is_visible(timeout=T(500)):
-                available_text = el.inner_text().strip()
-                break
-        except:
-            continue
-    
-    # Parse amounts (remove non-digits)
-    deposit_balance = int(re.sub(r'[^0-9]', '', deposit_text) or "0")
-    available_amount = int(re.sub(r'[^0-9]', '', available_text) or "0")
-    
+            time.sleep(2)
+        if to_int(deposit_text) > 0 or to_int(available_text) > 0:
+            break
+        if attempt == 1:
+            print("Balance still 0 after waiting; reloading once to confirm...")
+            page.reload(timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
+    print(f" -> Found balance: deposit='{deposit_text}' available='{available_text}'")
+
+    deposit_balance = to_int(deposit_text)
+    available_amount = to_int(available_text)
+
     return {
         'deposit_balance': deposit_balance,
         'available_amount': available_amount
