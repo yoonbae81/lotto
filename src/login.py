@@ -299,11 +299,15 @@ def login(page: Page) -> None:
     # 5. Wait for success indicator
     print("Verifying login...")
     try:
-        # Wait up to 10s for login to finalize
+        # Wait up to 30s for login to finalize (slower from remote runners)
         success = False
         start_t = time.time()
-        while time.time() - start_t < 10:
+        while time.time() - start_t < 30:
             if check_logged_in_elements(page, timeout=500):
+                success = True
+                break
+            # Leaving /login for another dhlottery page also means login succeeded
+            if "/login" not in page.url and "dhlottery.co.kr" in page.url:
                 success = True
                 break
             # If we see an error message, stop early
@@ -331,6 +335,10 @@ def login(page: Page) -> None:
                  raise Exception("Login failed: Invalid ID or password.")
              else:
                  if "/login" in page.url:
+                      try:
+                          page.screenshot(path="login_verify_failed.png", full_page=True)
+                      except Exception:
+                          pass
                       raise Exception(f"Login failed: Still on login page ({page.url})")
                  print(f"Assuming login might have worked (URL: {page.url})")
 

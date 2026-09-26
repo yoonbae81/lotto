@@ -46,3 +46,14 @@ jobs:
 
       - name: Run purchase workflow
         run: bash scripts/run.sh
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-screenshots
+          path: |
+            *.png
+            results/
+          if-no-files-found: ignore
+          retention-days: 3
