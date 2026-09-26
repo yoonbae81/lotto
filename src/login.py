@@ -268,6 +268,10 @@ def login(page: Page) -> None:
         # Wait for form fields - use visible=True for reliability
         page.wait_for_selector("#inpUserId", state="visible", timeout=GLOBAL_TIMEOUT)
     except Exception as e:
+        # Already logged in: /login redirects to main/mypage, so the form never appears
+        if "/login" not in page.url and "dhlottery.co.kr" in page.url:
+            print(f"Redirected away from login to {page.url} - already logged in.")
+            return
         print(f"Login form not ready: {e}")
         page.screenshot(path=f"login_form_failed_{int(time.time())}.png")
         raise e
