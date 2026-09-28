@@ -46,7 +46,7 @@
 | | Option A: 서버 (systemd) | Option B: GitHub Actions |
 |---|---|---|
 | 실행 위치 | 내 Linux 서버/홈서버 (국내 IP) | GitHub 러너 (해외 데이터센터 IP) |
-| 스케줄 | systemd 타이머 (매주 월요일 09:00 KST) | `cron: '0 0 * * 1'` (매주 월요일 09:00 KST) |
+| 스케줄 | systemd 타이머 (매주 월요일 09:00 KST) | 없음 — `workflow_dispatch`만 제공. 소유자는 외부 감시(OpenClaw)가, Fork 사용자는 자체 스케줄러/수동 실행이 트리거 |
 | 계정 정보 | 서버의 `.env` 파일 | GitHub Secrets / Variables |
 | 필요한 것 | 상시 켜진 Linux 서버 | GitHub 계정 (서버 불필요) |
 | 장점 | 국내 IP라 사이트 접속이 안정적 | 서버 관리 불필요 |
@@ -128,15 +128,15 @@ systemctl --user daemon-reload
 | 항목 | 내용 |
 |------|------|
 | 워크플로 | `.github/workflows/purchase.yml` (`Lotto Purchase (Run on GitHub)`) |
-| 실행 시점 | 매주 월요일 09:00 KST (`cron: '0 0 * * 1'`, UTC 기준) 및 수동 실행 |
+| 실행 시점 | 매주 월요일 09:15 KST — 소유자의 OpenClaw 감시 잡(`lotto-purchase-watchdog`)이 금일 성공 실행이 없으면 dispatch | 수동 실행 및 외부 트리거 (`workflow_dispatch`) |
 | 실행 환경 | `ubuntu-24.04`, Python 3.14, Playwright Chromium, Tesseract OCR |
 | 사용 액션 | `actions/checkout@v7`, `actions/setup-python@v7`, `actions/upload-artifact@v7` (Node 24) |
-| 커밋 시 동작 | 없음 (`push` 트리거 없음, 스케줄과 수동 실행만) |
+| 커밋 시 동작 | 없음 (`push` 트리거 없음, dispatch만) |
 
 > [!NOTE]
-> - GitHub 스케줄은 예약 시각보다 몇 분에서 수십 분 늦게 시작될 수 있음. cron을 바꾼 직후에는 반영에 시간이 걸려 해당 주기를 건너뛸 수 있음.
-> - 공개 저장소는 60일 동안 저장소 활동이 없으면 스케줄이 자동 비활성화됨. 비활성화되면 Actions 탭에서 다시 활성화.
-> - Fork한 저장소는 Actions가 기본 비활성화 상태이므로 Actions 탭에서 먼저 활성화 필요.
+> - GitHub의 `schedule` 트리거는 2026-09-28에 제거됐다. 월요일 00:00 UTC는 전 세계 cron이 몰리는 피크라 수십 분~1시간 지연이 잦고, 실행 자체가 조용히 드랍되는 사례가 관찰됐기 때문 (2025-12 로그에서도 매주 ~1시간 지연, 2026-09-28에는 완전 미실행).
+> - `workflow_dispatch`는 큐 지연 없이 즉시 시작된다. 소유자 인스턴스는 OpenClaw 감시 잡이 매주 월요일 09:15 KST에 “금일 성공 실행 존재 여부”를 확인하고 없으면 dispatch하며, 결과를 마지막까지 감시한다.
+> - Fork 사용자는 자체 `on: schedule:` 블록을 추가해 GitHub cron을 쓸 수 있으나, 위 지연/드랍 위험은 동일하게 적용된다. 외부 스케줄러에서 dispatch하는 쪽이 안정적이다.
 
 ### 1. Fork 하기
 
@@ -197,7 +197,7 @@ rm .secrets.env
 
 ### 3. 실행 확인 및 수동 실행
 
-- **자동 실행**: 매주 월요일 09:00 KST. 결과는 저장소 **Actions** 탭에서 확인
+- **자동 실행**: 매주 월요일 09:15 KST — OpenClaw 감시 잡이 dispatch. 결과는 저장소 **Actions** 탭에서 확인
 - **수동 실행**: Actions 탭 → `Lotto Purchase (Run on GitHub)` → `Run workflow`
 
 ```bash
@@ -400,8 +400,6 @@ systemctl --user daemon-reload
 systemctl --user restart lotto.timer
 ```
 
-### GitHub 스케줄이 실행되지 않음 (Option B)
-- Actions 탭에서 워크플로가 `disabled`인지 확인 (`gh workflow enable purchase.yml`)
-- cron은 UTC 기준: 월요일 09:00 KST = `0 0 * * 1`
-- 예약 직전에 cron을 바꾸면 그 주기를 건너뛸 수 있음
-- 60일간 저장소 활동이 없으면 자동 비활성화됨
+### GitHub 스케줄이 실행되지 않음 (참고 — 현재는 schedule 트리거 없음)
+- 2026-09-28부터 소유자 인스턴스는 OpenClaw 감시 잡이 `workflow_dispatch`로 주간 실행을 보장한다. `schedule` 트리거가 다시 필요하면 워크플로우에 `on: schedule:` 블록을 추가할 것.
+- 과거 참고: cron은 UTC 기준 (월요일 09:00 KST = `0 0 * * 1`), 월요일 00:00 UTC는 피크라 지연·드랍 잦음. 60일간 활동 없으면 자동 비활성화 (`gh workflow enable purchase.yml`).
