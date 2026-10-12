@@ -2,10 +2,9 @@ name: Lotto Purchase (Run on GitHub)
 
 on:
   workflow_dispatch:
-    # Dispatched every Monday ~09:15 KST by the OpenClaw watchdog
-    # (lead) on the Mac Studio. GitHub's own `schedule` trigger was
-    # removed: it repeatedly delayed/dropped runs at Monday 00:00 UTC,
-    # the peak cron window (observed 2026-09-28 and in Dec 2025 logs).
+  schedule:
+    # Every Monday 11:45 AM KST = 02:45 UTC
+    - cron: '45 2 * * 1'
 
 permissions:
   contents: read
