@@ -221,6 +221,23 @@ def check_logged_in_elements(page: Page, timeout: int = 2000) -> bool:
         return False
 
 
+def assert_not_password_expiry(page: Page) -> None:
+    """
+    비밀번호 주기변경(만료) 안내 페이지로 강제 리다이렉트된 경우
+    의미 없는 재시도 대신 명확한 에러로 즉시 종료합니다.
+    """
+    if "ExpryPswdNoti" in page.url:
+        try:
+            page.screenshot(path="password_expiry_notice.png", full_page=True)
+        except Exception:
+            pass
+        raise Exception(
+            "비밀번호 주기변경 안내 페이지로 리다이렉트되었습니다 (ExpryPswdNoti). "
+            "동행복권에 수동 로그인해 비밀번호를 변경한 뒤 GitHub secret PASSWD를 갱신하세요: "
+            "gh secret set PASSWD -R <owner>/<repo>"
+        )
+
+
 def is_logged_in(page: Page) -> bool:
     """
     Check if the user is currently logged in.
@@ -389,7 +406,10 @@ def login(page: Page) -> None:
 
     # Give a bit more time for session cookies to be stable
     time.sleep(2)
-    
+
+    # 비밀번호 주기변경 강제 안내 페이지에 걸린 경우 즉시 명확한 에러로 종료
+    assert_not_password_expiry(page)
+
 
 def main():
     """

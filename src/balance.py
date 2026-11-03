@@ -6,7 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from tscale import T
 from playwright.sync_api import Playwright, sync_playwright, Page
-from login import login, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT, CHROMIUM_ARGS
+from login import login, is_logged_in, assert_not_password_expiry, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT, CHROMIUM_ARGS
 
 import sys
 import traceback
@@ -29,6 +29,7 @@ def get_balance(page: Page) -> dict:
     
     # Check if redirected to login or error
     if "/login" in page.url or "method=login" in page.url or "/errorPage" in page.url:
+        assert_not_password_expiry(page)
         print("Not logged in. Redirected to login/error page. Attempting login...")
         login(page)
         # Re-navigate after login
