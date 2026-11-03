@@ -221,21 +221,48 @@ def check_logged_in_elements(page: Page, timeout: int = 2000) -> bool:
         return False
 
 
-def assert_not_password_expiry(page: Page) -> None:
+def dismiss_password_expiry(page: Page) -> None:
     """
     비밀번호 주기변경(만료) 안내 페이지로 강제 리다이렉트된 경우
-    의미 없는 재시도 대신 명확한 에러로 즉시 종료합니다.
+    '다음에 변경'(#btnCancel) 버튼을 눌러 건너뛰고 계속 진행합니다.
+    건너뛰기에 실패한 경우에만 명확한 에러로 종료합니다.
     """
-    if "ExpryPswdNoti" in page.url:
+    if "ExpryPswdNoti" not in page.url:
+        return
+
+    print("비밀번호 주기변경 안내 페이지 감지 — '다음에 변경' 클릭 시도...")
+    try:
+        page.screenshot(path="password_expiry_notice.png", full_page=True)
+    except Exception:
+        pass
+
+    for attempt in (1, 2, 3):
         try:
-            page.screenshot(path="password_expiry_notice.png", full_page=True)
-        except Exception:
-            pass
-        raise Exception(
-            "비밀번호 주기변경 안내 페이지로 리다이렉트되었습니다 (ExpryPswdNoti). "
-            "동행복권에 수동 로그인해 비밀번호를 변경한 뒤 GitHub secret PASSWD를 갱신하세요: "
-            "gh secret set PASSWD -R <owner>/<repo>"
-        )
+            btn = page.locator("#btnCancel").first
+            if btn.is_visible(timeout=T(3000)):
+                btn.click(timeout=T(3000))
+            else:
+                page.locator("button:has-text('다음에 변경')").first.click(timeout=T(3000))
+        except Exception as click_err:
+            print(f"'다음에 변경' 클릭 시도 {attempt}/3 실패: {click_err}")
+
+        # 안내 페이지에서 벗어났는지 확인
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            if "ExpryPswdNoti" not in page.url:
+                print(f"안내 페이지 건너뛰기 성공 (URL: {page.url})")
+                time.sleep(1)
+                return
+            time.sleep(0.5)
+
+    try:
+        page.screenshot(path="password_expiry_dismiss_failed.png", full_page=True)
+    except Exception:
+        pass
+    raise Exception(
+        "비밀번호 주기변경 안내 페이지(ExpryPswdNoti)를 건너뛰지 못했습니다. "
+        "'다음에 변경'(#btnCancel) 버튼 셀렉터가 바뀌었을 수 있으니 동행복권 수동 로그인으로 페이지 구조를 확인하세요."
+    )
 
 
 def is_logged_in(page: Page) -> bool:
@@ -407,8 +434,8 @@ def login(page: Page) -> None:
     # Give a bit more time for session cookies to be stable
     time.sleep(2)
 
-    # 비밀번호 주기변경 강제 안내 페이지에 걸린 경우 즉시 명확한 에러로 종료
-    assert_not_password_expiry(page)
+    # 비밀번호 주기변경 강제 안내 페이지에 걸린 경우 '다음에 변경'으로 건너뛰기
+    dismiss_password_expiry(page)
 
 
 def main():

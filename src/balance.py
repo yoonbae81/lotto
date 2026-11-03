@@ -6,7 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from tscale import T
 from playwright.sync_api import Playwright, sync_playwright, Page
-from login import login, is_logged_in, assert_not_password_expiry, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT, CHROMIUM_ARGS
+from login import login, is_logged_in, dismiss_password_expiry, SESSION_PATH, DEFAULT_USER_AGENT, DEFAULT_VIEWPORT, DEFAULT_HEADERS, GLOBAL_TIMEOUT, CHROMIUM_ARGS
 
 import sys
 import traceback
@@ -29,11 +29,13 @@ def get_balance(page: Page) -> dict:
     
     # Check if redirected to login or error
     if "/login" in page.url or "method=login" in page.url or "/errorPage" in page.url:
-        assert_not_password_expiry(page)
         print("Not logged in. Redirected to login/error page. Attempting login...")
         login(page)
         # Re-navigate after login
         page.goto("https://m.dhlottery.co.kr/mypage/home", timeout=GLOBAL_TIMEOUT, wait_until="domcontentloaded")
+
+    # 로그인 직후 비밀번호 주기변경 안내 페이지로 리다이렉트된 경우 건너뛰기
+    dismiss_password_expiry(page)
     
     # Try to find balance information
     try:
